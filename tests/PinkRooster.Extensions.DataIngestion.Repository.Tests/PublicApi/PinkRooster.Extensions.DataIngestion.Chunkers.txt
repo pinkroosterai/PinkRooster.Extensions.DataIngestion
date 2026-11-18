@@ -1,1 +1,15 @@
 # Public API for PinkRooster.Extensions.DataIngestion.Chunkers
+PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveChunkerOptions : Microsoft.Extensions.DataIngestion.IngestionChunkerOptions
+  ctor(Microsoft.ML.Tokenizers.Tokenizer tokenizer)
+  property PinkRooster.Extensions.DataIngestion.Chunkers.SeparatorPlacement KeepSeparator { get; set; }
+  property System.Boolean PreserveAtomicElements { get; set; }
+  property System.Collections.Generic.IReadOnlyList`1[System.String] Separators { get; set; }
+  property System.Int32 ReservedHeaderTokens { get; set; }
+PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveTokenChunker : Microsoft.Extensions.DataIngestion.IngestionChunker`1[System.String]
+  ctor(PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveChunkerOptions options)
+  method System.Collections.Generic.IAsyncEnumerable`1[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String]] ProcessAsync(Microsoft.Extensions.DataIngestion.IngestionDocument document, System.Threading.CancellationToken cancellationToken = null)
+PinkRooster.Extensions.DataIngestion.Chunkers.SeparatorPlacement : System.Enum
+  const PinkRooster.Extensions.DataIngestion.Chunkers.SeparatorPlacement Leading = 1
+  const PinkRooster.Extensions.DataIngestion.Chunkers.SeparatorPlacement None = 0
+  const PinkRooster.Extensions.DataIngestion.Chunkers.SeparatorPlacement Trailing = 2
+  field System.Int32 value__
