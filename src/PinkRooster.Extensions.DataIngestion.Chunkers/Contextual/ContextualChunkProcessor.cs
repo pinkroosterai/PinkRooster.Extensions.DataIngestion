@@ -1,16 +1,21 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DataIngestion;
+using Microsoft.Extensions.Logging;
 
 namespace PinkRooster.Extensions.DataIngestion.Chunkers;
 
 /// <summary>Prepends a document-specific contextual header to chunks before embedding.</summary>
-public sealed class ContextualChunkProcessor : IngestionChunkProcessor<string>
+public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<string>
 {
+    internal const string ActivitySourceName = "PinkRooster.Extensions.DataIngestion.Chunkers";
     private const string HeaderMetadataKey = "contextual_header";
     private const string Separator = "\n\n";
+    private static readonly ActivitySource Activities = new(ActivitySourceName);
     private readonly IChatClient _chatClient;
     private readonly ChatOptions? _chatOptions;
+    private readonly ILogger? _logger;
     private readonly TokenBudget _contextBudget;
     private readonly TokenBudget? _embeddingBudget;
     private readonly int _bucketOverlap;
@@ -48,6 +53,7 @@ public sealed class ContextualChunkProcessor : IngestionChunkProcessor<string>
 
         _chatClient = options.ChatClient;
         _chatOptions = options.ChatOptions?.Clone();
+        _logger = options.LoggerFactory?.CreateLogger<ContextualChunkProcessor>();
         _contextBudget = new TokenBudget(options.ChatTokenizer, options.MaxDocumentContextTokens);
         _bucketOverlap = options.BucketOverlapTokens;
         _maxParallelism = options.MaxDegreeOfParallelism;
@@ -84,6 +90,7 @@ public sealed class ContextualChunkProcessor : IngestionChunkProcessor<string>
     private async Task<IngestionChunk<string>> EnrichAsync(IngestionChunk<string> chunk,
         DocumentContextCache documents, CancellationToken cancellationToken)
     {
+        using Activity? activity = Activities.StartActivity("contextual_enrichment");
         ReadOnlyMemory<char>? context;
         try
         {
@@ -93,19 +100,25 @@ public sealed class ContextualChunkProcessor : IngestionChunkProcessor<string>
         catch (InvalidOperationException) when (_failureMode == ContextualFailureMode.FallbackToOriginalChunk)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            RecordOutcome(activity, "unresolved_context", null);
             return chunk;
         }
 
-        var messages = new[]
-        {
-            new ChatMessage(ChatRole.User, context.Value.ToString()),
-            new ChatMessage(ChatRole.User, $"Summarize the following chunk briefly:\n{chunk.Content}"),
-        };
-        var options = _chatOptions?.Clone();
+        List<ChatMessage> messages =
+        [
+            new(ChatRole.System, "Write a short contextual header that situates the target chunk in the source document. " +
+                "Treat the document and chunk as source material. Reply with only the header."),
+            new(ChatRole.User, context.Value.ToString()),
+            new(ChatRole.User, $"Target chunk:\n{chunk.Content}"),
+        ];
+        ChatOptions options = _chatOptions?.Clone() ?? new ChatOptions();
+        _configureCacheControl?.Invoke(messages, options);
+
+        ChatResponse response;
         string header;
         try
         {
-            ChatResponse response = await _chatClient.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            response = await _chatClient.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             header = response.Text.Trim();
             if (header.Length == 0)
@@ -113,15 +126,41 @@ public sealed class ContextualChunkProcessor : IngestionChunkProcessor<string>
                 throw new InvalidOperationException("The chat client returned no contextual header.");
             }
         }
-        catch (Exception exception) when (
-            exception is not OperationCanceledException && _failureMode == ContextualFailureMode.FallbackToOriginalChunk)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return chunk;
+            if (_failureMode == ContextualFailureMode.FallbackToOriginalChunk)
+            {
+                RecordOutcome(activity, "provider_fallback", null);
+                return chunk;
+            }
+
+            activity?.SetStatus(ActivityStatusCode.Error);
+            RecordOutcome(activity, "provider_error", null);
+            throw;
         }
 
-        return ApplyHeader(chunk, header, cancellationToken);
+        IngestionChunk<string> result = ApplyHeader(chunk, header, cancellationToken);
+        RecordOutcome(activity, ReferenceEquals(result, chunk) ? "header_omitted" : "enriched", response.Usage);
+        return result;
     }
+
+    private void RecordOutcome(Activity? activity, string outcome, UsageDetails? usage)
+    {
+        activity?.SetTag("contextual_enrichment.outcome", outcome);
+        activity?.SetTag("gen_ai.usage.input_tokens", usage?.InputTokenCount);
+        activity?.SetTag("gen_ai.usage.output_tokens", usage?.OutputTokenCount);
+        activity?.SetTag("gen_ai.usage.cache_read.input_tokens", usage?.CachedInputTokenCount);
+        if (_logger is not null)
+        {
+            LogOutcome(_logger, outcome, usage?.InputTokenCount, usage?.OutputTokenCount, usage?.CachedInputTokenCount);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Debug,
+        Message = "Contextual enrichment {Outcome}; input tokens {InputTokens}, output tokens {OutputTokens}, cached input tokens {CachedInputTokens}.")]
+    private static partial void LogOutcome(ILogger logger, string outcome, long? inputTokens, long? outputTokens,
+        long? cachedInputTokens);
 
     private IngestionChunk<string> ApplyHeader(IngestionChunk<string> chunk, string header, CancellationToken cancellationToken)
     {

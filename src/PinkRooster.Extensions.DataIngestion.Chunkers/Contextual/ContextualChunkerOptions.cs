@@ -34,5 +34,9 @@ public sealed class ContextualChunkerOptions(IChatClient chatClient, Tokenizer c
     public Func<IngestionChunk<string>, bool>? ChunkFilter { get; set; }
 
     /// <summary>Gets or sets a callback that configures provider-specific caching for one request.</summary>
+    /// <remarks>
+    /// The callback may run concurrently. It owns the request messages and option collections.
+    /// Nested values supplied in the original chat options are shared and should be treated as read-only.
+    /// </remarks>
     public Action<IList<ChatMessage>, ChatOptions>? ConfigureCacheControl { get; set; }
 }
