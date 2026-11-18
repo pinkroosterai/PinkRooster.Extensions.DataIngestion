@@ -1,4 +1,22 @@
 # Public API for PinkRooster.Extensions.DataIngestion.Chunkers
+PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkProcessor : Microsoft.Extensions.DataIngestion.IngestionChunkProcessor`1[System.String]
+  ctor(PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkerOptions options)
+  method System.Collections.Generic.IAsyncEnumerable`1[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String]] ProcessAsync(System.Collections.Generic.IAsyncEnumerable`1[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String]] chunks, System.Threading.CancellationToken cancellationToken = null)
+PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkerOptions : Microsoft.Extensions.DataIngestion.EnricherOptions
+  ctor(Microsoft.Extensions.AI.IChatClient chatClient, Microsoft.ML.Tokenizers.Tokenizer chatTokenizer)
+  property Microsoft.ML.Tokenizers.Tokenizer ChatTokenizer { get; }
+  property Microsoft.ML.Tokenizers.Tokenizer EmbeddingTokenizer { get; set; }
+  property PinkRooster.Extensions.DataIngestion.Chunkers.ContextualFailureMode FailureMode { get; set; }
+  property System.Action`2[System.Collections.Generic.IList`1[Microsoft.Extensions.AI.ChatMessage],Microsoft.Extensions.AI.ChatOptions] ConfigureCacheControl { get; set; }
+  property System.Func`2[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String],System.Boolean] ChunkFilter { get; set; }
+  property System.Int32 BucketOverlapTokens { get; set; }
+  property System.Int32 MaxDegreeOfParallelism { get; set; }
+  property System.Int32 MaxDocumentContextTokens { get; set; }
+  property System.Nullable`1[System.Int32] MaxEnrichedTokens { get; set; }
+PinkRooster.Extensions.DataIngestion.Chunkers.ContextualFailureMode : System.Enum
+  const PinkRooster.Extensions.DataIngestion.Chunkers.ContextualFailureMode FallbackToOriginalChunk = 0
+  const PinkRooster.Extensions.DataIngestion.Chunkers.ContextualFailureMode Throw = 1
+  field System.Int32 value__
 PinkRooster.Extensions.DataIngestion.Chunkers.DataIngestionChunkerServiceCollectionExtensions : System.Object
   method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddRecursiveTokenChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveChunkerOptions options)
 PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveChunkerOptions : Microsoft.Extensions.DataIngestion.IngestionChunkerOptions
