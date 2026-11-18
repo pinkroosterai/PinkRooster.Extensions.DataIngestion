@@ -1,6 +1,9 @@
 # PinkRooster.Extensions.DataIngestion
 
-Structure-aware text chunking for [Microsoft.Extensions.DataIngestion](https://www.nuget.org/packages/Microsoft.Extensions.DataIngestion) on .NET 10. Use `RecursiveTokenChunker` in an ingestion pipeline to split technical documents into ordered, token-bounded chunks while preserving heading context, tables, and fenced code where they fit.
+Text chunking and contextual enrichment for .NET 10 ingestion pipelines. [Microsoft.Extensions.DataIngestion](https://www.nuget.org/packages/Microsoft.Extensions.DataIngestion)
+
+- `RecursiveTokenChunker` splits technical documents into ordered, token-bounded chunks and preserves heading context, tables, and fenced code where they fit.
+- `ContextualChunkProcessor` uses an `IChatClient` to add a short document-specific header before embedding.
 
 ## Use from source
 
@@ -49,15 +52,36 @@ Pass the chunker as the `IngestionChunker<string>` in an `IngestionPipeline<stri
 
 ## Contextual enrichment
 
-Add `ContextualChunkProcessor` to `IngestionPipeline<string>.ChunkProcessors` to prepend a short, document-specific header before embedding. Supply your `IChatClient` and the tokenizer used for document context.
+Add a processor to your ingestion pipeline with the chat client and tokenizers for your selected models. This example caps final embedding content at 512 tokens, including the generated header and separator.
 
 ```csharp
-var contextual = new ContextualChunkProcessor(
-    new ContextualChunkerOptions(chatClient, chatTokenizer));
-pipeline.ChunkProcessors.Add(contextual);
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DataIngestion;
+using Microsoft.ML.Tokenizers;
+using PinkRooster.Extensions.DataIngestion.Chunkers;
+
+static void AddContextualEnrichment(
+    IngestionPipeline<string> pipeline,
+    IChatClient chatClient,
+    Tokenizer chatTokenizer,
+    Tokenizer embeddingTokenizer)
+{
+    var options = new ContextualChunkerOptions(chatClient, chatTokenizer)
+    {
+        EmbeddingTokenizer = embeddingTokenizer,
+        MaxEnrichedTokens = 512,
+    };
+
+    pipeline.ChunkProcessors.Add(new ContextualChunkProcessor(options));
+}
 ```
 
-Use `services.AddContextualChunkProcessor(options)` for DI. Configure `MaxEnrichedTokens` with an `EmbeddingTokenizer` to cap the complete output. The processor preserves the body and source metadata. Its default failure mode returns the original chunk when enrichment fails and the original fits the cap. Document windows and the target chunk are sent to the supplied client. Chunks in the same window share the request prefix, and `ConfigureCacheControl` can configure the provider's caching options.
+For DI, register your options with `services.AddContextualChunkProcessor(options)`. Resolve `IngestionChunkProcessor<string>` and add it to the pipeline's `ChunkProcessors` collection.
+
+- **Document context.** Large documents use fixed windows. `MaxDocumentContextTokens` defaults to 32,000 source tokens and `BucketOverlapTokens` to 2,000. Leave room in the chat model's context window for instructions, the target chunk, and the response.
+- **Request ordering.** `MaxDegreeOfParallelism` defaults to four concurrent requests per enumeration. Results are yielded in input order. `BatchSize` limits how many chunks can be admitted before the consumer advances.
+- **Output and failures.** Enriched chunks preserve the body, document, context, and existing metadata, and record the new header under `contextual_header`. The processor shortens or omits the header to meet the output cap. An original chunk that already exceeds the cap raises an error. For a chunk within the cap, the default failure mode returns the original if enrichment fails. Use `ContextualFailureMode.Throw` to propagate the failure or `ChunkFilter` to bypass selected chunks.
+- **Prompt caching.** The selected document window and target chunk go to the configured client. Chunks in the same window share a stable request prefix. Use `ConfigureCacheControl` for provider-specific settings. The callback may run concurrently.
 
 ## Build and test
 
@@ -74,12 +98,14 @@ See the [project charter](docs/PID.md) for the roadmap.
 
 ### Live prompt cache check
 
-The live test sends synthetic text to OpenAI and makes up to four billable requests. Provide `OPENAI_API_KEY` through your local environment and set `PINKROOSTER_LIVE_CACHE_MODEL` to a Chat Completions model that supports prompt caching. Run from the repository root.
+The default test suite skips the live check. The opt-in check sends synthetic text to OpenAI and makes up to four billable requests. Set `OPENAI_API_KEY` in your local environment before running this command from the repository root.
 
 ```bash
-PINKROOSTER_RUN_LIVE_CACHE_TEST=1 dotnet test --project \
+PINKROOSTER_RUN_LIVE_CACHE_TEST=1 PINKROOSTER_LIVE_CACHE_MODEL=gpt-4.1-mini \
+  dotnet test --project \
   tests/PinkRooster.Extensions.DataIngestion.Chunkers.Tests/PinkRooster.Extensions.DataIngestion.Chunkers.Tests.csproj \
-  --output Detailed -- --show-live-output on
+  --output Detailed -- --show-live-output on \
+  --filter-method '*ContextualLiveCacheTests.LiveProviderReportsACacheReadForASharedPrefix'
 ```
 
-The test reports the model and cached-token count for each request. A successful run records a positive count on a follow-up request with the same prefix.
+The test passes when a follow-up request with the same prefix reports a positive cached-token count. In the verified `gpt-4.1-mini` run, the warm-up reported 0 cached tokens and the follow-up reported 3,200.
