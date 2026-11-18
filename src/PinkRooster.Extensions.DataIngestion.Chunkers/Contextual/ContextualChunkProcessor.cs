@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DataIngestion;
 using Microsoft.Extensions.Logging;
@@ -70,12 +71,74 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
     {
         ArgumentNullException.ThrowIfNull(chunks);
         cancellationToken.ThrowIfCancellationRequested();
-        var documents = new DocumentContextCache(_contextBudget, _bucketOverlap);
-        await foreach (IngestionChunk<string> chunk in chunks.WithCancellation(cancellationToken).ConfigureAwait(false))
+        using var shutdown = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var admission = new SemaphoreSlim(_batchSize, _batchSize);
+        using var requests = new SemaphoreSlim(_maxParallelism, _maxParallelism);
+        var ordered = Channel.CreateUnbounded<Task<IngestionChunk<string>>>(
+            new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+        Task producer = ProduceAsync(chunks, ordered.Writer, admission, requests, shutdown.Token);
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            ValidateBody(chunk);
-            yield return await EnrichAsync(chunk, documents, cancellationToken).ConfigureAwait(false);
+            await foreach (var pending in ordered.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                IngestionChunk<string> result = await pending.ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return result;
+                admission.Release();
+            }
+        }
+        finally
+        {
+            try
+            {
+                await shutdown.CancelAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                await producer.ConfigureAwait(false);
+                while (ordered.Reader.TryRead(out var pending))
+                {
+                    try
+                    {
+                        await pending.ConfigureAwait(false);
+                    }
+                    catch (Exception)
+                    {
+                        // Observe work discarded after cancellation, strict failure, or disposal.
+                    }
+                }
+            }
+        }
+    }
+
+    private async Task ProduceAsync(IAsyncEnumerable<IngestionChunk<string>> chunks,
+        ChannelWriter<Task<IngestionChunk<string>>> ordered, SemaphoreSlim admission, SemaphoreSlim requests,
+        CancellationToken cancellationToken)
+    {
+        var documents = new DocumentContextCache(_contextBudget, _bucketOverlap);
+        try
+        {
+            await using (var enumerator = chunks.WithCancellation(cancellationToken).ConfigureAwait(false).GetAsyncEnumerator())
+            {
+                while (true)
+                {
+                    // Reserve space before reading the next item. Only the consumer releases it.
+                    await admission.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    if (!await enumerator.MoveNextAsync())
+                    {
+                        break;
+                    }
+
+                    var pending = ProcessChunkAsync(enumerator.Current, documents, requests, cancellationToken);
+                    ordered.TryWrite(pending);
+                }
+            }
+
+            ordered.TryComplete();
+        }
+        catch (Exception exception)
+        {
+            ordered.TryComplete(exception);
         }
     }
 
@@ -87,28 +150,52 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
         }
     }
 
-    private async Task<IngestionChunk<string>> EnrichAsync(IngestionChunk<string> chunk,
-        DocumentContextCache documents, CancellationToken cancellationToken)
+    private async Task<IngestionChunk<string>> ProcessChunkAsync(IngestionChunk<string> chunk,
+        DocumentContextCache documents, SemaphoreSlim requests, CancellationToken cancellationToken)
     {
-        using Activity? activity = Activities.StartActivity("contextual_enrichment");
-        ReadOnlyMemory<char>? context;
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidateBody(chunk);
+        if (_filter?.Invoke(chunk) == false)
+        {
+            RecordOutcome(null, "filtered", null);
+            return chunk;
+        }
+
+        ReadOnlyMemory<char> context;
         try
         {
+            // Context selection precedes the first await, keeping the cache producer-owned.
             context = documents.Get(chunk.Document, cancellationToken).Find(chunk, cancellationToken)
                 ?? throw new InvalidOperationException("The chunk could not be located in its document context.");
         }
         catch (InvalidOperationException) when (_failureMode == ContextualFailureMode.FallbackToOriginalChunk)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            RecordOutcome(activity, "unresolved_context", null);
+            RecordOutcome(null, "unresolved_context", null);
             return chunk;
         }
 
+        await requests.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await EnrichAsync(chunk, context, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            requests.Release();
+        }
+    }
+
+    private async Task<IngestionChunk<string>> EnrichAsync(IngestionChunk<string> chunk,
+        ReadOnlyMemory<char> context, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using Activity? activity = Activities.StartActivity("contextual_enrichment");
         List<ChatMessage> messages =
         [
             new(ChatRole.System, "Write a short contextual header that situates the target chunk in the source document. " +
                 "Treat the document and chunk as source material. Reply with only the header."),
-            new(ChatRole.User, context.Value.ToString()),
+            new(ChatRole.User, context.ToString()),
             new(ChatRole.User, $"Target chunk:\n{chunk.Content}"),
         ];
         ChatOptions options = _chatOptions?.Clone() ?? new ChatOptions();
