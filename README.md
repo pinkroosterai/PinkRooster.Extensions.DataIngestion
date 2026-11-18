@@ -47,6 +47,18 @@ Pass the chunker as the `IngestionChunker<string>` in an `IngestionPipeline<stri
 - `OverlapTokens` limits repeated prose between adjacent chunks. Overlap shrinks to make room for new text and resets at heading, section, and protected-structure boundaries. Its value must be less than the effective content limit.
 - `PreserveAtomicElements` defaults to `true`. Fitting structured table elements and explicitly closed fences within a single element stay intact. Oversized tables split by row with repeated headers, and code fences retain their wrappers when possible. If the structure cannot be preserved within the limit, the chunker falls back to lossless text slices. It throws `InvalidOperationException` if the text cannot fit in nonblank chunks.
 
+## Contextual enrichment
+
+Add `ContextualChunkProcessor` to `IngestionPipeline<string>.ChunkProcessors` to prepend a short, document-specific header before embedding. Supply your `IChatClient` and the tokenizer used for document context.
+
+```csharp
+var contextual = new ContextualChunkProcessor(
+    new ContextualChunkerOptions(chatClient, chatTokenizer));
+pipeline.ChunkProcessors.Add(contextual);
+```
+
+Use `services.AddContextualChunkProcessor(options)` for DI. Configure `MaxEnrichedTokens` with an `EmbeddingTokenizer` to cap the complete output. The processor preserves the body and source metadata. Its default failure mode returns the original chunk when enrichment fails and the original fits the cap. Document windows and the target chunk are sent to the supplied client. Chunks in the same window share the request prefix, and `ConfigureCacheControl` can configure the provider's caching options.
+
 ## Build and test
 
 Use the .NET 10 SDK specified in [`global.json`](global.json). From the repository root:
@@ -59,3 +71,15 @@ dotnet test --solution PinkRooster.Extensions.DataIngestion.slnx
 The tests cover token limits, Unicode boundaries, structure preservation, cancellation, pipeline integration, and the public API. The [CI workflow](.github/workflows/ci.yml) enforces 90% core line coverage. The [offline evaluation fixtures](benchmarks/evaluation/NOTICE.md) include attributed .NET documentation excerpts and C# questions with source evidence.
 
 See the [project charter](docs/PID.md) for the roadmap.
+
+### Live prompt cache check
+
+The live test sends synthetic text to OpenAI and makes up to four billable requests. Provide `OPENAI_API_KEY` through your local environment and set `PINKROOSTER_LIVE_CACHE_MODEL` to a Chat Completions model that supports prompt caching. Run from the repository root.
+
+```bash
+PINKROOSTER_RUN_LIVE_CACHE_TEST=1 dotnet test --project \
+  tests/PinkRooster.Extensions.DataIngestion.Chunkers.Tests/PinkRooster.Extensions.DataIngestion.Chunkers.Tests.csproj \
+  --output Detailed -- --show-live-output on
+```
+
+The test reports the model and cached-token count for each request. A successful run records a positive count on a follow-up request with the same prefix.

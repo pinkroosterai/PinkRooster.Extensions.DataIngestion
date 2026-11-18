@@ -47,12 +47,60 @@ public sealed class PipelineTests
         missingOptions.Should().Throw<ArgumentNullException>().WithParameterName("options");
     }
 
+    [Fact]
+    public async Task DirectAndRegisteredContextProcessorsEnrichTheLocalPipeline()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var staging = Directory.CreateTempSubdirectory("contextual-ingestion-");
+        try
+        {
+            var file = new FileInfo(Path.Combine(staging.FullName, "fixture.md"));
+            await File.WriteAllTextAsync(file.FullName,
+                "# Dispatch\nThe dispatch calendar calculates the next date.", token);
+            using var client = ContextualChunkProcessorTests.Reply("Dispatch policy");
+            var options = ContextualChunkProcessorTests.Options(client);
+            options.EmbeddingTokenizer = TokenizerFixture.Instance;
+            options.MaxEnrichedTokens = 12;
+            using var services = new ServiceCollection().AddContextualChunkProcessor(options).BuildServiceProvider();
+            var registered = services.GetRequiredService<IngestionChunkProcessor<string>>();
+
+            var direct = await RunAsync(NewChunker(5), file, token, new ContextualChunkProcessor(options));
+            var injected = await RunAsync(NewChunker(5), file, token, registered);
+
+            injected.Select(chunk => (chunk.Content, chunk.Context)).Should()
+                .Equal(direct.Select(chunk => (chunk.Content, chunk.Context)));
+            injected.Should().OnlyContain(chunk => chunk.Content.StartsWith("Dispatch policy\n\n", StringComparison.Ordinal));
+            AssertBudget(injected, 12);
+        }
+        finally
+        {
+            staging.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ContextualRegistrationValidatesItsArguments()
+    {
+        using var client = ContextualChunkProcessorTests.Reply("unused");
+        Action missingServices = () => DataIngestionChunkerServiceCollectionExtensions
+            .AddContextualChunkProcessor(null!, ContextualChunkProcessorTests.Options(client));
+        Action missingOptions = () => new ServiceCollection().AddContextualChunkProcessor(null!);
+
+        missingServices.Should().Throw<ArgumentNullException>().WithParameterName("services");
+        missingOptions.Should().Throw<ArgumentNullException>().WithParameterName("options");
+    }
+
     private static async Task<IReadOnlyList<IngestionChunk<string>>> RunAsync(
-        IngestionChunker<string> chunker, FileInfo file, CancellationToken cancellationToken)
+        IngestionChunker<string> chunker, FileInfo file, CancellationToken cancellationToken,
+        IngestionChunkProcessor<string>? processor = null)
     {
         var reader = new FixtureReader();
         var writer = new CapturingWriter();
         using var pipeline = new IngestionPipeline<string>(reader, chunker, writer);
+        if (processor is not null)
+        {
+            pipeline.ChunkProcessors.Add(processor);
+        }
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken, TestContext.Current.CancellationToken);
         var results = new List<IngestionResult>();

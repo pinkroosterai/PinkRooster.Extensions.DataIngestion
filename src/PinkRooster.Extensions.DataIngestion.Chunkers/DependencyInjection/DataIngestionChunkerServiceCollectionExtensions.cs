@@ -16,4 +16,15 @@ public static class DataIngestionChunkerServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         return services.AddSingleton<IngestionChunker<string>>(new RecursiveTokenChunker(options));
     }
+
+    /// <summary>Registers a configured singleton contextual processor for string chunks.</summary>
+    /// <param name="services">The service collection to add the processor to.</param>
+    /// <param name="options">The options used to construct and configure the processor.</param>
+    /// <returns>The service collection for chaining registrations.</returns>
+    public static IServiceCollection AddContextualChunkProcessor(
+        this IServiceCollection services, ContextualChunkerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        return services.AddSingleton<IngestionChunkProcessor<string>>(new ContextualChunkProcessor(options));
+    }
 }
