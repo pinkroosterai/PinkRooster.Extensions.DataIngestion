@@ -11,7 +11,7 @@ internal static class TextBoundaries
     internal static int FindPrefix(
         TokenBudget budget, ReadOnlySpan<char> text, int limit, CancellationToken cancellationToken)
     {
-        if (text.IsEmpty || limit <= 0)
+        if (limit <= 0 || text.IsWhiteSpace())
         {
             return 0;
         }

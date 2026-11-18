@@ -3,8 +3,8 @@ namespace PinkRooster.Extensions.DataIngestion.Chunkers;
 internal sealed class ProseSplitter(
     TokenBudget budget, string[] separators, SeparatorPlacement placement, bool useDefaults)
 {
-    internal IEnumerable<Range> Split(string text, string element, CancellationToken cancellationToken) =>
-        Split(text, 0, text.Length, 0, element, cancellationToken);
+    internal IEnumerable<Range> Split(string text, int start, int end, string element, CancellationToken cancellationToken) =>
+        Split(text, start, end, 0, element, cancellationToken);
 
     internal bool IsOverlapBoundary(ReadOnlySpan<char> text, int start)
     {

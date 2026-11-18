@@ -9,7 +9,7 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
     private readonly TokenBudget _budget;
     private readonly ProseSplitter _splitter;
     private readonly int _overlap;
-    private readonly bool _preserveAtomicElements;
+    private readonly ProtectedChunker? _protectedChunker;
 
     /// <summary>Initializes the chunker with a validated snapshot of its configuration.</summary>
     /// <param name="options">The chunker configuration, including its tokenizer.</param>
@@ -43,7 +43,7 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
         _splitter = new ProseSplitter(_budget, separators, options.KeepSeparator,
             separators.SequenceEqual(RecursiveChunkerOptions.DefaultSeparators, StringComparer.Ordinal));
         _overlap = options.OverlapTokens;
-        _preserveAtomicElements = options.PreserveAtomicElements;
+        _protectedChunker = options.PreserveAtomicElements ? new ProtectedChunker(_budget) : null;
     }
 
     /// <inheritdoc/>
@@ -109,12 +109,62 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
                 continue;
             }
 
-            foreach (string chunk in AddProse(buffer, markdown, element.GetType().Name, followingProse, cancellationToken))
+            if (_protectedChunker is not null && element is IngestionDocumentTable table)
             {
-                yield return new IngestionChunk<string>(chunk, document, context);
+                if (Take(buffer) is { } text)
+                {
+                    yield return new IngestionChunk<string>(text, document, context);
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                foreach (string chunk in _protectedChunker.Table(table, markdown, cancellationToken))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    yield return new IngestionChunk<string>(chunk, document, context);
+                }
+
+                followingProse = false;
+                continue;
             }
 
-            followingProse = true;
+            string elementName = element.GetType().Name;
+            int start = 0;
+            if (_protectedChunker is not null)
+            {
+                foreach (MarkdownFence fence in MarkdownFence.Find(markdown, cancellationToken))
+                {
+                    foreach (string chunk in AddProse(buffer, markdown, start, fence.Start, elementName,
+                                 followingProse, cancellationToken))
+                    {
+                        yield return new IngestionChunk<string>(chunk, document, context);
+                    }
+
+                    if (Take(buffer) is { } text)
+                    {
+                        yield return new IngestionChunk<string>(text, document, context);
+                    }
+
+                    cancellationToken.ThrowIfCancellationRequested();
+                    foreach (string chunk in _protectedChunker.Fence(markdown, fence, cancellationToken))
+                    {
+                        yield return new IngestionChunk<string>(chunk, document, context);
+                    }
+
+                    start = fence.End;
+                    followingProse = false;
+                }
+            }
+
+            if (!markdown.AsSpan(start).IsWhiteSpace())
+            {
+                foreach (string chunk in AddProse(buffer, markdown, start, markdown.Length, elementName,
+                             followingProse, cancellationToken))
+                {
+                    yield return new IngestionChunk<string>(chunk, document, context);
+                }
+
+                followingProse = true;
+            }
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -127,9 +177,9 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
     }
 
     private IEnumerable<string> AddProse(
-        PooledText buffer, string text, string element, bool separate, CancellationToken cancellationToken)
+        PooledText buffer, string text, int start, int end, string element, bool separate, CancellationToken cancellationToken)
     {
-        foreach (Range range in _splitter.Split(text, element, cancellationToken))
+        foreach (Range range in _splitter.Split(text, start, end, element, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!TryAppend(buffer, text, range, separate))
