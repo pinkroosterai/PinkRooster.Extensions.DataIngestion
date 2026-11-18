@@ -1,0 +1,27 @@
+[
+  {
+    "id": "dotnet-date-format-table",
+    "path": "fixtures/date-format-table.md",
+    "license": "CC-BY-4.0",
+    "origin": "https://github.com/dotnet/docs/blob/e813999fcd8dc0e9c549a95a0cb041c3dc5cb7d6/docs/standard/base-types/custom-date-and-time-format-strings.md#L42-L51",
+    "sha256": "6aa3420bfe2a7fb4df3d0556abae9043f430618f51d6dcb48005e69468b7994f",
+    "changes": "Added a heading and removed cross-references to sections outside the excerpt.",
+    "revision": "e813999fcd8dc0e9c549a95a0cb041c3dc5cb7d6"
+  },
+  {
+    "id": "dotnet-csharp-identifier-fences",
+    "path": "fixtures/csharp-identifier-fences.md",
+    "license": "CC-BY-4.0; MIT for code",
+    "origin": "https://github.com/dotnet/docs/blob/e813999fcd8dc0e9c549a95a0cb041c3dc5cb7d6/docs/csharp/fundamentals/coding-style/identifier-names.md#L59-L85",
+    "sha256": "0054972696e449a618b2144da859df9c8dd255f91fd0cfac4da66767c65f078e",
+    "changes": "Added the article title above the excerpt.",
+    "revision": "e813999fcd8dc0e9c549a95a0cb041c3dc5cb7d6"
+  },
+  {
+    "id": "authored-dispatch-calendar",
+    "path": "fixtures/DispatchCalendar.cs",
+    "license": "MIT",
+    "origin": "Original fixture authored for PinkRooster.Extensions.DataIngestion.",
+    "sha256": "78e026e9a0e22221c8c16c92f7c6f701178e1109d8b8b692c426b05ea005755a"
+  }
+]

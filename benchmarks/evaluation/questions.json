@@ -1,0 +1,43 @@
+[
+  {
+    "id": "dispatch-calendar-clock",
+    "sourceId": "authored-dispatch-calendar",
+    "question": "Which dependency supplies the current date to DispatchCalendar?",
+    "expectedAnswer": "The IDispatchClock instance injected through the primary constructor supplies Today.",
+    "evidence": [
+      {
+        "startLine": 3,
+        "endLine": 6,
+        "text": "public interface IDispatchClock\n{\n    DateOnly Today { get; }\n}"
+      },
+      {
+        "startLine": 8,
+        "endLine": 8,
+        "text": "public sealed class DispatchCalendar(IDispatchClock clock)"
+      },
+      {
+        "startLine": 15,
+        "endLine": 15,
+        "text": "        return clock.Today.AddDays(days);"
+      }
+    ]
+  },
+  {
+    "id": "dispatch-standard-delay",
+    "sourceId": "authored-dispatch-calendar",
+    "question": "How far after the current date does a standard dispatch occur?",
+    "expectedAnswer": "Two days after the current date.",
+    "evidence": [
+      {
+        "startLine": 10,
+        "endLine": 10,
+        "text": "    private const int StandardDispatchDays = 2;"
+      },
+      {
+        "startLine": 12,
+        "endLine": 15,
+        "text": "    public DateOnly GetDispatchDate(bool express)\n    {\n        int days = express ? 0 : StandardDispatchDays;\n        return clock.Today.AddDays(days);"
+      }
+    ]
+  }
+]
