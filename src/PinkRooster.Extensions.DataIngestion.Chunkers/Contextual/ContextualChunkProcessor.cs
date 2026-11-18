@@ -64,11 +64,12 @@ public sealed class ContextualChunkProcessor : IngestionChunkProcessor<string>
     {
         ArgumentNullException.ThrowIfNull(chunks);
         cancellationToken.ThrowIfCancellationRequested();
+        var documents = new DocumentContextCache(_contextBudget, _bucketOverlap);
         await foreach (IngestionChunk<string> chunk in chunks.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ValidateBody(chunk);
-            yield return await EnrichAsync(chunk, cancellationToken).ConfigureAwait(false);
+            yield return await EnrichAsync(chunk, documents, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -80,9 +81,26 @@ public sealed class ContextualChunkProcessor : IngestionChunkProcessor<string>
         }
     }
 
-    private async Task<IngestionChunk<string>> EnrichAsync(IngestionChunk<string> chunk, CancellationToken cancellationToken)
+    private async Task<IngestionChunk<string>> EnrichAsync(IngestionChunk<string> chunk,
+        DocumentContextCache documents, CancellationToken cancellationToken)
     {
-        var messages = new[] { new ChatMessage(ChatRole.User, $"Summarize the following chunk briefly:\n{chunk.Content}") };
+        ReadOnlyMemory<char>? context;
+        try
+        {
+            context = documents.Get(chunk.Document, cancellationToken).Find(chunk, cancellationToken)
+                ?? throw new InvalidOperationException("The chunk could not be located in its document context.");
+        }
+        catch (InvalidOperationException) when (_failureMode == ContextualFailureMode.FallbackToOriginalChunk)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return chunk;
+        }
+
+        var messages = new[]
+        {
+            new ChatMessage(ChatRole.User, context.Value.ToString()),
+            new ChatMessage(ChatRole.User, $"Summarize the following chunk briefly:\n{chunk.Content}"),
+        };
         var options = _chatOptions?.Clone();
         string header;
         try
