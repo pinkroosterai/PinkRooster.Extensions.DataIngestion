@@ -1,0 +1,28 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet restore PinkRooster.Extensions.DataIngestion.slnx -p:NuGetAuditMode=all
+      - run: dotnet build PinkRooster.Extensions.DataIngestion.slnx --no-restore
+      - run: dotnet test --solution PinkRooster.Extensions.DataIngestion.slnx --no-build
+      - name: Collect core line coverage
+        run: >
+          dotnet test --project tests/PinkRooster.Extensions.DataIngestion.Chunkers.Tests/PinkRooster.Extensions.DataIngestion.Chunkers.Tests.csproj
+          --no-build --results-directory artifacts/coverage --
+          --coverage --coverage-settings tests/coverage.runsettings
+          --coverage-output-format cobertura --coverage-output core.cobertura.xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-coverage
+          path: artifacts/coverage/**/core.cobertura.xml
+          if-no-files-found: error

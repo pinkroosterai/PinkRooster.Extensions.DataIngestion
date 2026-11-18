@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsTrimmable>true</IsTrimmable>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Description>Structure-aware recursive token chunking for Microsoft.Extensions.DataIngestion.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DataIngestion" />
+    <PackageReference Include="Microsoft.ML.Tokenizers" />
+    <InternalsVisibleTo Include="PinkRooster.Extensions.DataIngestion.Chunkers.Tests" />
+  </ItemGroup>
+</Project>
