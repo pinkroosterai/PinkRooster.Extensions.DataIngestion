@@ -21,7 +21,10 @@ jobs:
           --no-build --results-directory artifacts/coverage --
           --coverage --coverage-settings tests/coverage.runsettings
           --coverage-output-format cobertura --coverage-output core.cobertura.xml
+      - name: Enforce core line coverage
+        run: python3 tests/check-core-coverage.py artifacts/coverage
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: core-coverage
           path: artifacts/coverage/**/core.cobertura.xml

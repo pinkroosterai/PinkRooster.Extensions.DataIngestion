@@ -1,4 +1,6 @@
 # Public API for PinkRooster.Extensions.DataIngestion.Chunkers
+PinkRooster.Extensions.DataIngestion.Chunkers.DataIngestionChunkerServiceCollectionExtensions : System.Object
+  method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddRecursiveTokenChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveChunkerOptions options)
 PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveChunkerOptions : Microsoft.Extensions.DataIngestion.IngestionChunkerOptions
   ctor(Microsoft.ML.Tokenizers.Tokenizer tokenizer)
   property PinkRooster.Extensions.DataIngestion.Chunkers.SeparatorPlacement KeepSeparator { get; set; }
