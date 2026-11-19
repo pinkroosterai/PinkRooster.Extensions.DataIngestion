@@ -4,6 +4,7 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/PinkRooster.Extensions.DataIngestion.Chunkers/PinkRooster.Extensions.DataIngestion.Chunkers.csproj" />
+    <Project Path="src/PinkRooster.Extensions.DataIngestion.CodeAnalysis/PinkRooster.Extensions.DataIngestion.CodeAnalysis.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PinkRooster.Extensions.DataIngestion.Chunkers.Tests/PinkRooster.Extensions.DataIngestion.Chunkers.Tests.csproj" />

@@ -1,0 +1,14 @@
+# Public API for PinkRooster.Extensions.DataIngestion.CodeAnalysis
+PinkRooster.Extensions.DataIngestion.CodeAnalysis.CodeAnalysisChunkerServiceCollectionExtensions : System.Object
+  method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddRoslynCodeChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.CodeAnalysis.RoslynChunkerOptions options)
+PinkRooster.Extensions.DataIngestion.CodeAnalysis.RoslynChunkerOptions : Microsoft.Extensions.DataIngestion.IngestionChunkerOptions
+  ctor(Microsoft.ML.Tokenizers.Tokenizer tokenizer)
+  property System.Boolean IncludeEnclosingTypeSignature { get; set; }
+  property System.Boolean IncludeUsingDirectives { get; set; }
+  property System.Boolean StripRegionTrivia { get; set; }
+PinkRooster.Extensions.DataIngestion.CodeAnalysis.RoslynCodeChunker : Microsoft.Extensions.DataIngestion.IngestionChunker`1[System.String]
+  ctor(PinkRooster.Extensions.DataIngestion.CodeAnalysis.RoslynChunkerOptions options)
+  method System.Collections.Generic.IAsyncEnumerable`1[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String]] ProcessAsync(Microsoft.Extensions.DataIngestion.IngestionDocument document, System.Threading.CancellationToken cancellationToken = null)
+PinkRooster.Extensions.DataIngestion.CodeAnalysis.SourceCodeDocumentReader : Microsoft.Extensions.DataIngestion.IngestionDocumentReader
+  ctor()
+  method System.Threading.Tasks.Task`1[Microsoft.Extensions.DataIngestion.IngestionDocument] ReadAsync(System.IO.Stream source, System.String identifier, System.String mediaType, System.Threading.CancellationToken cancellationToken = null)

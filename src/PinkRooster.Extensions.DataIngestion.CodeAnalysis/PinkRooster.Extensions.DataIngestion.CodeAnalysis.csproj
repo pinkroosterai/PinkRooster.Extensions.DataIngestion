@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Description>Roslyn-based C# source reading and syntax-aware chunking for Microsoft.Extensions.DataIngestion.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../PinkRooster.Extensions.DataIngestion.Chunkers/PinkRooster.Extensions.DataIngestion.Chunkers.csproj" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+</Project>

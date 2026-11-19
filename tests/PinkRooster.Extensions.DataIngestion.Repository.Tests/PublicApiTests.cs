@@ -6,15 +6,16 @@ namespace PinkRooster.Extensions.DataIngestion.Repository.Tests;
 
 public sealed class PublicApiTests
 {
-    private const string AssemblyName = "PinkRooster.Extensions.DataIngestion.Chunkers";
     private const BindingFlags PublicMembers = BindingFlags.Public | BindingFlags.Instance |
         BindingFlags.Static | BindingFlags.DeclaredOnly;
 
-    [Fact]
-    public void CorePublicApiMatchesSnapshot()
+    [Theory]
+    [InlineData("PinkRooster.Extensions.DataIngestion.Chunkers")]
+    [InlineData("PinkRooster.Extensions.DataIngestion.CodeAnalysis")]
+    public void PublicApiMatchesSnapshot(string assemblyName)
     {
-        var lines = new List<string> { "# Public API for " + AssemblyName };
-        foreach (var type in Assembly.Load(AssemblyName).GetExportedTypes()
+        var lines = new List<string> { "# Public API for " + assemblyName };
+        foreach (var type in Assembly.Load(assemblyName).GetExportedTypes()
                      .OrderBy(type => type.FullName, StringComparer.Ordinal))
         {
             lines.Add($"{type.FullName} : {type.BaseType}");
@@ -26,7 +27,7 @@ public sealed class PublicApiTests
         }
 
         string actual = string.Join('\n', lines) + "\n";
-        string filename = AssemblyName + ".txt";
+        string filename = assemblyName + ".txt";
         if (Environment.GetEnvironmentVariable("PINKROOSTER_UPDATE_PUBLIC_API") == "1")
         {
             File.WriteAllText(FindSnapshotSource(filename), actual);

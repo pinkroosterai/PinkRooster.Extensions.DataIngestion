@@ -83,6 +83,31 @@ For DI, register your options with `services.AddContextualChunkProcessor(options
 - **Output and failures.** Enriched chunks preserve the body, document, context, and existing metadata, and record the new header under `contextual_header`. The processor shortens or omits the header to meet the output cap. An original chunk that already exceeds the cap raises an error. For a chunk within the cap, the default failure mode returns the original if enrichment fails. Use `ContextualFailureMode.Throw` to propagate the failure or `ChunkFilter` to bypass selected chunks.
 - **Prompt caching.** The selected document window and target chunk go to the configured client. Chunks in the same window share a stable request prefix. Use `ConfigureCacheControl` for provider-specific settings. The callback may run concurrently.
 
+## C# source chunking
+
+Use the `PinkRooster.Extensions.DataIngestion.CodeAnalysis` package for raw C# files or documents with fenced C# blocks. The reader preserves raw source and directives. The chunker uses Roslyn's syntax tree to group declarations and split oversized members at statement boundaries when the token budget allows.
+
+```csharp
+using Microsoft.ML.Tokenizers;
+using PinkRooster.Extensions.DataIngestion.CodeAnalysis;
+
+var reader = new SourceCodeDocumentReader();
+var options = new RoslynChunkerOptions(TiktokenTokenizer.CreateForModel("gpt-4o"))
+{
+    MaxTokensPerChunk = 256,
+    OverlapTokens = 0,
+};
+var chunker = new RoslynCodeChunker(options);
+var document = await reader.ReadAsync(new FileInfo("Example.cs"));
+await foreach (var chunk in chunker.ProcessAsync(document))
+{
+    Console.WriteLine(chunk.Context);
+    Console.WriteLine(chunk.Content);
+}
+```
+
+The chunk context carries the enclosing namespace, type signature and member names. Set `IncludeUsingDirectives` to include using directives in that context. `StripRegionTrivia` drops region directives whose partner is outside the chunk. For dependency injection, use `services.AddRoslynCodeChunker(options)`.
+
 ## Build and test
 
 Use the .NET 10 SDK specified in [`global.json`](global.json). From the repository root:
