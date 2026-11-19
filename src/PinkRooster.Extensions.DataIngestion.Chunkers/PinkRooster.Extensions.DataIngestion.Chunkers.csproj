@@ -1,15 +1,24 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
+    <PackageId>PinkRooster.Extensions.DataIngestion.Chunkers</PackageId>
+    <Description>Structure-aware recursive token chunking and contextual enrichment for Microsoft.Extensions.DataIngestion.</Description>
+    <PackageTags>rag chunker chunking token recursive dataingestion pinkrooster</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsAotCompatible>true</IsAotCompatible>
     <IsTrimmable>true</IsTrimmable>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <Description>Structure-aware recursive token chunking for Microsoft.Extensions.DataIngestion.</Description>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\docs\PinkRooster.Extensions.DataIngestion.Chunkers.md" Pack="true" PackagePath="/README.md" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DataIngestion" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.ML.Tokenizers" />
     <InternalsVisibleTo Include="PinkRooster.Extensions.DataIngestion.Chunkers.Tests" />
   </ItemGroup>
+
 </Project>

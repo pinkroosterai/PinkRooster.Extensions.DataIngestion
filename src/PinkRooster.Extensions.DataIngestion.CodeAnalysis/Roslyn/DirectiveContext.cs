@@ -13,10 +13,10 @@ internal sealed class DirectiveContext
     internal DirectiveContext(CompilationUnitSyntax root, string source, CancellationToken token)
     {
         _source = source;
-        var openRegions = new Stack<int>();
-        var conditionals = new List<ConditionalBranch>();
-        var lines = root.SyntaxTree.GetText(token).Lines;
-        foreach (var trivia in root.DescendantTrivia(descendIntoTrivia: true))
+        Stack<int> openRegions = new Stack<int>();
+        List<ConditionalBranch> conditionals = new List<ConditionalBranch>();
+        TextLineCollection lines = root.SyntaxTree.GetText(token).Lines;
+        foreach (Microsoft.CodeAnalysis.SyntaxTrivia trivia in root.DescendantTrivia(descendIntoTrivia: true))
         {
             token.ThrowIfCancellationRequested();
             switch (trivia.GetStructure())
@@ -29,7 +29,7 @@ internal sealed class DirectiveContext
                     TextSpan line = lines.GetLineFromPosition(end.SpanStart).SpanIncludingLineBreak;
                     if (openRegions.TryPop(out int index))
                     {
-                        var original = _regions[index];
+                        Region original = _regions[index];
                         _regions[index] = original with { Partner = line };
                         _regions.Add(new Region(line, original.Span));
                     }
@@ -45,13 +45,13 @@ internal sealed class DirectiveContext
                     Record(start.FullSpan.End);
                     break;
                 case ElifDirectiveTriviaSyntax next when conditionals.Count > 0:
-                    var previous = conditionals[^1].Tested;
+                    string[] previous = conditionals[^1].Tested;
                     string[] tested = [.. previous, .. Names(next.Condition)];
                     conditionals[^1] = new ConditionalBranch(tested, next.BranchTaken ? tested : []);
                     Record(next.FullSpan.End);
                     break;
                 case ElseDirectiveTriviaSyntax alternate when conditionals.Count > 0:
-                    var branch = conditionals[^1];
+                    ConditionalBranch branch = conditionals[^1];
                     conditionals[^1] = branch with { Active = alternate.BranchTaken ? branch.Tested : [] };
                     Record(alternate.FullSpan.End);
                     break;
@@ -74,7 +74,7 @@ internal sealed class DirectiveContext
         }
 
         int index = _conditions.FindLastIndex(condition => condition.Offset <= span.Start);
-        var symbols = new SortedSet<string>(StringComparer.Ordinal);
+        SortedSet<string> symbols = new SortedSet<string>(StringComparer.Ordinal);
         if (index >= 0)
         {
             symbols.UnionWith(_conditions[index].Symbols);
@@ -92,7 +92,7 @@ internal sealed class DirectiveContext
     {
         StringBuilder? output = null;
         int cursor = span.Start;
-        foreach (var region in _regions)
+        foreach (Region region in _regions)
         {
             if (region.Span.Start >= span.End)
             {

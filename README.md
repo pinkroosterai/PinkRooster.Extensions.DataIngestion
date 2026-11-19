@@ -1,136 +1,105 @@
+<div align="center">
+
+<img src="assets/logo.png" alt="PinkRooster logo" width="160" />
+
 # PinkRooster.Extensions.DataIngestion
 
-Text chunking and contextual enrichment for .NET 10 ingestion pipelines. [Microsoft.Extensions.DataIngestion](https://www.nuget.org/packages/Microsoft.Extensions.DataIngestion)
+**Structure-aware recursive token chunking and contextual enrichment for Microsoft.Extensions.DataIngestion**
 
-- `RecursiveTokenChunker` splits technical documents into ordered, token-bounded chunks and preserves heading context, tables, and fenced code where they fit.
-- `ContextualChunkProcessor` uses an `IChatClient` to add a short document-specific header before embedding.
+[![CI](https://github.com/pinkroosterai/PinkRooster.Extensions.DataIngestion/actions/workflows/ci.yml/badge.svg)](https://github.com/pinkroosterai/PinkRooster.Extensions.DataIngestion/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/vpre/PinkRooster.Extensions.DataIngestion.Chunkers.svg)](https://www.nuget.org/packages/PinkRooster.Extensions.DataIngestion.Chunkers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
 
-## Use from source
+[The idea](#the-idea) · [Install](#install) · [Quickstart](#quickstart) · [Packages](#packages) · [Samples](#samples) · [Docs](#docs) · [Contributing](#feedback-contributing-security-and-license)
 
-From the repository root, add a project reference and the vocabulary used by the example. Replace `<app.csproj>` with the path to your .NET 10 application project. If your app uses Central Package Management, declare the vocabulary version in its `Directory.Packages.props`.
+</div>
 
-```bash
-dotnet add <app.csproj> reference src/PinkRooster.Extensions.DataIngestion.Chunkers/PinkRooster.Extensions.DataIngestion.Chunkers.csproj
-dotnet add <app.csproj> package Microsoft.ML.Tokenizers.Data.O200kBase --version 3.0.0
+---
+
+## Status
+
+Preview (`1.0.0-preview.1`), developed against the .NET 10 SDK on Linux and Windows.
+
+## The idea
+
+`Microsoft.Extensions.DataIngestion` offers standard primitives for RAG ingestion pipelines, but naive token chunking frequently shatters structured elements (Markdown tables, code blocks, section hierarchies) or severs semantic code boundaries in C# files.
+
+`PinkRooster.Extensions.DataIngestion` delivers high-performance, structure-aware chunkers:
+- **`RecursiveTokenChunker`**: Hierarchical document chunker with stepped token budget windows (`MaxTokensPerChunk`, `ReservedHeaderTokens`, `OverlapTokens`), zero-allocation text slicing on `ReadOnlySpan<char>`, boundary snapping to scalar word boundaries, and atomic preservation of tables and code fences.
+- **`ContextualChunkProcessor`**: Situational document-level context generator using `IChatClient` (`Microsoft.Extensions.AI`) with stepped bucket sliding windows, bounded concurrency, and prefix prompt caching.
+- **`RoslynCodeChunker` & `SourceCodeDocumentReader`**: Roslyn AST-powered chunking that splits C# types, records, and methods at grammar boundaries and propagates symbol breadcrumbs (`Namespace.Class.Method`) into `chunk.Context`.
+
+Empirical evaluation against standard technical documentation and C# source corpora demonstrates over 20% retrieval lift (MRR) compared to baseline token chunking.
+
+## Install
+
+```text
+dotnet add package PinkRooster.Extensions.DataIngestion.Chunkers --prerelease
+dotnet add package PinkRooster.Extensions.DataIngestion.CodeAnalysis --prerelease
 ```
 
-```csharp
-using Microsoft.Extensions.DataIngestion;
-using Microsoft.ML.Tokenizers;
-using PinkRooster.Extensions.DataIngestion.Chunkers;
+## Quickstart
 
-var options = new RecursiveChunkerOptions(TiktokenTokenizer.CreateForModel("gpt-4o"))
+<!-- quickstart:start -->
+```csharp
+var tokenizer = TiktokenTokenizer.CreateForModel("gpt-4o");
+
+var recursiveOptions = new RecursiveChunkerOptions(tokenizer)
 {
-    MaxTokensPerChunk = 16,
-    ReservedHeaderTokens = 4,
-    OverlapTokens = 0,
+    MaxTokensPerChunk = 64,
+    ReservedHeaderTokens = 12,
+    OverlapTokens = 8,
+    PreserveAtomicElements = true,
 };
 
-var document = new IngestionDocument("dispatch-guide");
-var section = new IngestionDocumentSection();
-section.Elements.Add(new IngestionDocumentHeader("# Dispatch") { Level = 1 });
-section.Elements.Add(new IngestionDocumentParagraph(
-    "Standard orders ship within two business days. Express orders ship the same day."));
-document.Sections.Add(section);
+var recursiveChunker = new RecursiveTokenChunker(recursiveOptions);
+```
+<!-- quickstart:end -->
 
-var chunker = new RecursiveTokenChunker(options);
-await foreach (var chunk in chunker.ProcessAsync(document))
-{
-    Console.WriteLine(chunk.Context);
-    Console.WriteLine(chunk.Content);
-}
+## Packages
+
+| Package | What it adds | Dependencies |
+|---|---|---|
+| [`PinkRooster.Extensions.DataIngestion.Chunkers`](https://www.nuget.org/packages/PinkRooster.Extensions.DataIngestion.Chunkers) | Recursive token chunker and contextual enrichment processor | `Microsoft.Extensions.DataIngestion`, `Microsoft.ML.Tokenizers` |
+| [`PinkRooster.Extensions.DataIngestion.CodeAnalysis`](https://www.nuget.org/packages/PinkRooster.Extensions.DataIngestion.CodeAnalysis) | Roslyn C# source document reader and AST syntax-aware chunker | `Microsoft.CodeAnalysis.CSharp`, `PinkRooster.Extensions.DataIngestion.Chunkers` |
+
+## Samples
+
+An end-to-end sample console pipeline demonstrating Markdown prose chunking, contextual enrichment, and C# AST chunking is available in [`samples/PinkRooster.Extensions.DataIngestion.Samples`](samples/PinkRooster.Extensions.DataIngestion.Samples).
+
+Run the sample:
+
+```text
+dotnet run --project samples/PinkRooster.Extensions.DataIngestion.Samples
 ```
 
-Pass the chunker as the `IngestionChunker<string>` in an `IngestionPipeline<string>` when you have a reader and writer. To register it with dependency injection, call `services.AddRecursiveTokenChunker(options)` on your `IServiceCollection`. The extension registers a singleton as `IngestionChunker<string>`.
+## Benchmarks & Evaluation
 
-## Chunking behavior
+Micro-benchmarks and retrieval quality evaluations are located in [`benchmarks/PinkRooster.Extensions.DataIngestion.Benchmarks`](benchmarks/PinkRooster.Extensions.DataIngestion.Benchmarks):
 
-- The effective content limit is `MaxTokensPerChunk - ReservedHeaderTokens`. It includes overlap and any repeated markup. The heading breadcrumb lives separately in `chunk.Context`.
-- The default separator order is paragraph breaks, line breaks, sentence punctuation, spaces, then token-based source slices. Set `Separators` to change the order and `KeepSeparator` to retain separators on the leading or trailing fragment or omit them.
-- `OverlapTokens` limits repeated prose between adjacent chunks. Overlap shrinks to make room for new text and resets at heading, section, and protected-structure boundaries. Its value must be less than the effective content limit.
-- `PreserveAtomicElements` defaults to `true`. Fitting structured table elements and explicitly closed fences within a single element stay intact. Oversized tables split by row with repeated headers, and code fences retain their wrappers when possible. If the structure cannot be preserved within the limit, the chunker falls back to lossless text slices. It throws `InvalidOperationException` if the text cannot fit in nonblank chunks.
+- **Throughput & Allocations**: Run `dotnet run --project benchmarks/PinkRooster.Extensions.DataIngestion.Benchmarks -c Release -- --filter *ChunkerThroughputBenchmarks*` to execute the BenchmarkDotNet suite.
+- **Retrieval Lift**: On reference suites (`benchmarks/evaluation/reference`), `RecursiveTokenChunker` achieves 0.6875 MRR compared to 0.5625 for baseline `DocumentTokenChunker` (>20% lift).
+- **Smoke Verification**: Run `dotnet run --project benchmarks/PinkRooster.Extensions.DataIngestion.Benchmarks -c Debug -- smoke benchmarks/evaluation` for an offline evaluation check.
 
-## Contextual enrichment
+## Docs
 
-Add a processor to your ingestion pipeline with the chat client and tokenizers for your selected models. This example caps final embedding content at 512 tokens, including the generated header and separator.
+- [PinkRooster.Extensions.DataIngestion.Chunkers](docs/PinkRooster.Extensions.DataIngestion.Chunkers.md)
+- [PinkRooster.Extensions.DataIngestion.CodeAnalysis](docs/PinkRooster.Extensions.DataIngestion.CodeAnalysis.md)
 
-```csharp
-using Microsoft.Extensions.AI;
-using Microsoft.Extensions.DataIngestion;
-using Microsoft.ML.Tokenizers;
-using PinkRooster.Extensions.DataIngestion.Chunkers;
+## Compatibility
 
-static void AddContextualEnrichment(
-    IngestionPipeline<string> pipeline,
-    IChatClient chatClient,
-    Tokenizer chatTokenizer,
-    Tokenizer embeddingTokenizer)
-{
-    var options = new ContextualChunkerOptions(chatClient, chatTokenizer)
-    {
-        EmbeddingTokenizer = embeddingTokenizer,
-        MaxEnrichedTokens = 512,
-    };
-
-    pipeline.ChunkProcessors.Add(new ContextualChunkProcessor(options));
-}
-```
-
-For DI, register your options with `services.AddContextualChunkProcessor(options)`. Resolve `IngestionChunkProcessor<string>` and add it to the pipeline's `ChunkProcessors` collection.
-
-- **Document context.** Large documents use fixed windows. `MaxDocumentContextTokens` defaults to 32,000 source tokens and `BucketOverlapTokens` to 2,000. Leave room in the chat model's context window for instructions, the target chunk, and the response.
-- **Request ordering.** `MaxDegreeOfParallelism` defaults to four concurrent requests per enumeration. Results are yielded in input order. `BatchSize` limits how many chunks can be admitted before the consumer advances.
-- **Output and failures.** Enriched chunks preserve the body, document, context, and existing metadata, and record the new header under `contextual_header`. The processor shortens or omits the header to meet the output cap. An original chunk that already exceeds the cap raises an error. For a chunk within the cap, the default failure mode returns the original if enrichment fails. Use `ContextualFailureMode.Throw` to propagate the failure or `ChunkFilter` to bypass selected chunks.
-- **Prompt caching.** The selected document window and target chunk go to the configured client. Chunks in the same window share a stable request prefix. Use `ConfigureCacheControl` for provider-specific settings. The callback may run concurrently.
-
-## C# source chunking
-
-Use the `PinkRooster.Extensions.DataIngestion.CodeAnalysis` package for raw C# files or documents with fenced C# blocks. The reader preserves raw source and directives. The chunker uses Roslyn's syntax tree to group declarations and split oversized members at statement boundaries when the token budget allows.
-
-```csharp
-using Microsoft.ML.Tokenizers;
-using PinkRooster.Extensions.DataIngestion.CodeAnalysis;
-
-var reader = new SourceCodeDocumentReader();
-var options = new RoslynChunkerOptions(TiktokenTokenizer.CreateForModel("gpt-4o"))
-{
-    MaxTokensPerChunk = 256,
-    OverlapTokens = 0,
-};
-var chunker = new RoslynCodeChunker(options);
-var document = await reader.ReadAsync(new FileInfo("Example.cs"));
-await foreach (var chunk in chunker.ProcessAsync(document))
-{
-    Console.WriteLine(chunk.Context);
-    Console.WriteLine(chunk.Content);
-}
-```
-
-The chunk context carries the enclosing namespace, type signature and member names. Set `IncludeUsingDirectives` to include using directives in that context. `StripRegionTrivia` drops region directives whose partner is outside the chunk. For dependency injection, use `services.AddRoslynCodeChunker(options)`.
+- .NET 10 SDK (`net10.0`)
+- AOT and trimming validated for `PinkRooster.Extensions.DataIngestion.Chunkers`
+- Tested on Ubuntu 24.04 and Windows
 
 ## Build and test
 
-Use the .NET 10 SDK specified in [`global.json`](global.json). From the repository root:
-
-```bash
-dotnet build PinkRooster.Extensions.DataIngestion.slnx
-dotnet test --solution PinkRooster.Extensions.DataIngestion.slnx
+```text
+dotnet build PinkRooster.Extensions.DataIngestion.slnx -c Release
+dotnet test --solution PinkRooster.Extensions.DataIngestion.slnx -c Release
 ```
 
-The tests cover token limits, Unicode boundaries, structure preservation, cancellation, pipeline integration, and the public API. The [CI workflow](.github/workflows/ci.yml) enforces 90% core line coverage. The [offline evaluation fixtures](benchmarks/evaluation/NOTICE.md) include attributed .NET documentation excerpts and C# questions with source evidence.
+## Feedback, contributing, security and license
 
-See the [project charter](docs/PID.md) for the roadmap.
-
-### Live prompt cache check
-
-The default test suite skips the live check. The opt-in check sends synthetic text to OpenAI and makes up to four billable requests. Set `OPENAI_API_KEY` in your local environment before running this command from the repository root.
-
-```bash
-PINKROOSTER_RUN_LIVE_CACHE_TEST=1 PINKROOSTER_LIVE_CACHE_MODEL=gpt-4.1-mini \
-  dotnet test --project \
-  tests/PinkRooster.Extensions.DataIngestion.Chunkers.Tests/PinkRooster.Extensions.DataIngestion.Chunkers.Tests.csproj \
-  --output Detailed -- --show-live-output on \
-  --filter-method '*ContextualLiveCacheTests.LiveProviderReportsACacheReadForASharedPrefix'
-```
-
-The test passes when a follow-up request with the same prefix reports a positive cached-token count. In the verified `gpt-4.1-mini` run, the warm-up reported 0 cached tokens and the follow-up reported 3,200.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) first. Report a vulnerability as [SECURITY.md](SECURITY.md) describes. The code is [MIT](LICENSE) licensed.

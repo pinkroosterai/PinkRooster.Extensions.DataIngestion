@@ -6,7 +6,7 @@ internal static class CSharpSourceBlocks
 {
     internal static IEnumerable<string> Read(IngestionDocumentSection section, CancellationToken cancellationToken)
     {
-        foreach (var element in section.Elements)
+        foreach (IngestionDocumentElement element in section.Elements)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (element is IngestionDocumentSection child)

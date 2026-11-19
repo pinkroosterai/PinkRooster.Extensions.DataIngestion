@@ -43,15 +43,15 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
         ArgumentNullException.ThrowIfNull(document);
         cancellationToken.ThrowIfCancellationRequested();
         await Task.CompletedTask.ConfigureAwait(false);
-        foreach (var section in document.Sections)
+        foreach (IngestionDocumentSection section in document.Sections)
         {
             foreach (string source in CSharpSourceBlocks.Read(section, cancellationToken))
             {
-                var root = CSharpSyntaxTree.ParseText(source, ParseOptions, cancellationToken: cancellationToken)
+                CompilationUnitSyntax root = CSharpSyntaxTree.ParseText(source, ParseOptions, cancellationToken: cancellationToken)
                     .GetCompilationUnitRoot(cancellationToken);
-                var directives = new DirectiveContext(root, source, cancellationToken);
-                var scope = new CodeScope(null, null, null).WithUsings(root.Usings, _includeUsings);
-                foreach (var slice in Partition(source, root.FullSpan, root.Members, scope, cancellationToken))
+                DirectiveContext directives = new DirectiveContext(root, source, cancellationToken);
+                CodeScope scope = new CodeScope(null, null, null).WithUsings(root.Usings, _includeUsings);
+                foreach (CodeSlice slice in Partition(source, root.FullSpan, root.Members, scope, cancellationToken))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     string content = _stripRegions
@@ -63,14 +63,14 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
                     }
 
                     string[] symbols = directives.GetSymbols(slice.Span);
-                    foreach (var bounded in WithinBudget(content, new TextSpan(0, content.Length), [], 0, cancellationToken))
+                    foreach (TextSpan bounded in WithinBudget(content, new TextSpan(0, content.Length), [], 0, cancellationToken))
                     {
                         if (content.AsSpan(bounded.Start, bounded.Length).IsWhiteSpace())
                         {
                             continue;
                         }
 
-                        var chunk = new IngestionChunk<string>(
+                        IngestionChunk<string> chunk = new IngestionChunk<string>(
                             bounded.Length == content.Length ? content : content.Substring(bounded.Start, bounded.Length),
                             document, slice.Context);
                         if (symbols.Length > 0)
@@ -90,7 +90,7 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
     {
         if (members.Count == 0)
         {
-            foreach (var slice in Split(source, span, null, scope.Context(), token))
+            foreach (CodeSlice slice in Split(source, span, null, scope.Context(), token))
             {
                 yield return slice;
             }
@@ -98,7 +98,7 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
             yield break;
         }
 
-        foreach (var slice in Split(source, TextSpan.FromBounds(span.Start, members[0].FullSpan.Start),
+        foreach (CodeSlice slice in Split(source, TextSpan.FromBounds(span.Start, members[0].FullSpan.Start),
                      null, scope.Context(), token))
         {
             yield return slice;
@@ -107,11 +107,11 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
         for (int index = 0; index < members.Count;)
         {
             token.ThrowIfCancellationRequested();
-            var member = members[index++];
+            MemberDeclarationSyntax member = members[index++];
             if (member is BaseNamespaceDeclarationSyntax space)
             {
-                var nested = scope.WithNamespace(space.Name.ToString()).WithUsings(space.Usings, _includeUsings);
-                foreach (var slice in Partition(source, member.FullSpan, space.Members, nested, token))
+                CodeScope nested = scope.WithNamespace(space.Name.ToString()).WithUsings(space.Usings, _includeUsings);
+                foreach (CodeSlice slice in Partition(source, member.FullSpan, space.Members, nested, token))
                 {
                     yield return slice;
                 }
@@ -121,12 +121,12 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
 
             if (member is BaseTypeDeclarationSyntax type)
             {
-                var nested = scope.WithType(type, _includeTypeSignature);
+                CodeScope nested = scope.WithType(type, _includeTypeSignature);
                 bool fits = Fits(source, member.FullSpan);
-                var slices = type is TypeDeclarationSyntax declaration && !fits && declaration.Members.Count > 0
+                IEnumerable<CodeSlice> slices = type is TypeDeclarationSyntax declaration && !fits && declaration.Members.Count > 0
                     ? Partition(source, member.FullSpan, declaration.Members, nested, token)
                     : Split(source, member.FullSpan, member, nested.Context(), token);
-                foreach (var slice in slices)
+                foreach (CodeSlice slice in slices)
                 {
                     yield return slice;
                 }
@@ -135,14 +135,14 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
             }
 
             TextSpan group = member.FullSpan;
-            var names = new List<string> { MemberName(member) };
+            List<string> names = new List<string> { MemberName(member) };
             if (Fits(source, group))
             {
                 while (index < members.Count && members[index] is not (BaseTypeDeclarationSyntax or BaseNamespaceDeclarationSyntax))
                 {
                     token.ThrowIfCancellationRequested();
-                    var next = members[index];
-                    var combined = TextSpan.FromBounds(group.Start, next.FullSpan.End);
+                    MemberDeclarationSyntax next = members[index];
+                    TextSpan combined = TextSpan.FromBounds(group.Start, next.FullSpan.End);
                     if (!Fits(source, combined))
                     {
                         break;
@@ -154,14 +154,14 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
                 }
             }
 
-            foreach (var slice in Split(source, group, member,
+            foreach (CodeSlice slice in Split(source, group, member,
                          scope.Context($"Member: {string.Join(", ", names)}"), token))
             {
                 yield return slice;
             }
         }
 
-        foreach (var slice in Split(source, TextSpan.FromBounds(members[^1].FullSpan.End, span.End),
+        foreach (CodeSlice slice in Split(source, TextSpan.FromBounds(members[^1].FullSpan.End, span.End),
                      null, scope.Context(), token))
         {
             yield return slice;
@@ -190,7 +190,7 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
                 .Distinct().Order().ToArray();
         }
 
-        foreach (var part in WithinBudget(source, span, boundaries, _overlap, token))
+        foreach (TextSpan part in WithinBudget(source, span, boundaries, _overlap, token))
         {
             yield return new CodeSlice(part, context);
         }
@@ -204,7 +204,7 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
         while (cursor < span.End)
         {
             token.ThrowIfCancellationRequested();
-            var remaining = TextSpan.FromBounds(cursor, span.End);
+            TextSpan remaining = TextSpan.FromBounds(cursor, span.End);
             if (Fits(source, remaining))
             {
                 yield return remaining;
@@ -237,7 +237,7 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
                 end = limit;
             }
 
-            var part = TextSpan.FromBounds(cursor, end);
+            TextSpan part = TextSpan.FromBounds(cursor, end);
             yield return part;
             covered = end;
             if (end == span.End)
@@ -251,7 +251,7 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
 
     private int FindLimit(string source, TextSpan span, CancellationToken token)
     {
-        var text = source.AsSpan(span.Start, span.Length);
+        ReadOnlySpan<char> text = source.AsSpan(span.Start, span.Length);
         int first = text.Length > 1 && char.IsSurrogatePair(text[0], text[1]) ? 2 : 1;
         int length = Math.Max(first, _tokenizer.GetIndexByTokenCount(text, _maxTokens, out _, out _,
             considerNormalization: false));
@@ -276,7 +276,7 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
 
     private int OverlapStart(string source, TextSpan part, int overlap)
     {
-        var text = source.AsSpan(part.Start, part.Length);
+        ReadOnlySpan<char> text = source.AsSpan(part.Start, part.Length);
         int offset = Math.Max(1, _tokenizer.GetIndexByTokenCountFromEnd(text, overlap, out _, out _,
             considerNormalization: false));
         while (offset < text.Length && !char.IsWhiteSpace(text[offset - 1]) && !char.IsWhiteSpace(text[offset]))

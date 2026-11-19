@@ -1,15 +1,20 @@
-name: Build and test
+name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
       - run: dotnet restore PinkRooster.Extensions.DataIngestion.slnx -p:NuGetAuditMode=all
@@ -27,7 +32,7 @@ jobs:
           --coverage-output-format cobertura --coverage-output core.cobertura.xml
       - name: Enforce core line coverage
         run: python3 tests/check-core-coverage.py artifacts/coverage
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         if: always()
         with:
           name: core-coverage

@@ -23,7 +23,7 @@ internal sealed class ProtectedChunker(TokenBudget budget)
             yield break;
         }
 
-        using var buffer = new PooledText();
+        using PooledText buffer = new PooledText();
         buffer.Append(markdown.AsSpan(fence.Start, fence.BodyStart - fence.Start));
         int openingLength = buffer.Length;
         string newline = buffer.Span.EndsWith("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
@@ -124,7 +124,7 @@ internal sealed class ProtectedChunker(TokenBudget budget)
             return null;
         }
 
-        using var buffer = new PooledText();
+        using PooledText buffer = new PooledText();
         AppendRow(buffer, cells, 0, cancellationToken);
         buffer.Append("\n|");
         for (int i = 0; i < columns; i++)
@@ -252,7 +252,7 @@ internal sealed class ProtectedChunker(TokenBudget budget)
 
         // A greedy split may strand blank text or choose a prefix that prevents a later
         // fit. Check reachability at scalar boundaries before declaring the block impossible.
-        var nextBoundary = new int[end - start + 1];
+        int[] nextBoundary = new int[end - start + 1];
         nextBoundary[^1] = end;
         for (int first = end - 1; first >= start; first--)
         {

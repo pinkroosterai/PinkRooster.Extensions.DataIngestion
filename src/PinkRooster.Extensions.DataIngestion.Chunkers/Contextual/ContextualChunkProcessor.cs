@@ -71,15 +71,15 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
     {
         ArgumentNullException.ThrowIfNull(chunks);
         cancellationToken.ThrowIfCancellationRequested();
-        using var shutdown = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        using var admission = new SemaphoreSlim(_batchSize, _batchSize);
-        using var requests = new SemaphoreSlim(_maxParallelism, _maxParallelism);
-        var ordered = Channel.CreateUnbounded<Task<IngestionChunk<string>>>(
+        using CancellationTokenSource shutdown = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using SemaphoreSlim admission = new SemaphoreSlim(_batchSize, _batchSize);
+        using SemaphoreSlim requests = new SemaphoreSlim(_maxParallelism, _maxParallelism);
+        Channel<Task<IngestionChunk<string>>> ordered = Channel.CreateUnbounded<Task<IngestionChunk<string>>>(
             new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
         Task producer = ProduceAsync(chunks, ordered.Writer, admission, requests, shutdown.Token);
         try
         {
-            await foreach (var pending in ordered.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (Task<IngestionChunk<string>>? pending in ordered.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
                 IngestionChunk<string> result = await pending.ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
@@ -96,7 +96,7 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
             finally
             {
                 await producer.ConfigureAwait(false);
-                while (ordered.Reader.TryRead(out var pending))
+                while (ordered.Reader.TryRead(out Task<IngestionChunk<string>>? pending))
                 {
                     try
                     {
@@ -115,10 +115,10 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
         ChannelWriter<Task<IngestionChunk<string>>> ordered, SemaphoreSlim admission, SemaphoreSlim requests,
         CancellationToken cancellationToken)
     {
-        var documents = new DocumentContextCache(_contextBudget, _bucketOverlap);
+        DocumentContextCache documents = new DocumentContextCache(_contextBudget, _bucketOverlap);
         try
         {
-            await using (var enumerator = chunks.WithCancellation(cancellationToken).ConfigureAwait(false).GetAsyncEnumerator())
+            await using (ConfiguredCancelableAsyncEnumerable<IngestionChunk<string>>.Enumerator enumerator = chunks.WithCancellation(cancellationToken).ConfigureAwait(false).GetAsyncEnumerator())
             {
                 while (true)
                 {
@@ -129,7 +129,7 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
                         break;
                     }
 
-                    var pending = ProcessChunkAsync(enumerator.Current, documents, requests, cancellationToken);
+                    Task<IngestionChunk<string>> pending = ProcessChunkAsync(enumerator.Current, documents, requests, cancellationToken);
                     ordered.TryWrite(pending);
                 }
             }
@@ -256,7 +256,7 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
             return CopyChunk(chunk, header, string.Concat(header, Separator, chunk.Content));
         }
 
-        using var content = new PooledText();
+        using PooledText content = new PooledText();
         for (int end = header.Length; end > 0; end--)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -286,10 +286,10 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
 
     private static IngestionChunk<string> CopyChunk(IngestionChunk<string> original, string header, string content)
     {
-        var result = new IngestionChunk<string>(content, original.Document, original.Context);
+        IngestionChunk<string> result = new IngestionChunk<string>(content, original.Document, original.Context);
         if (original.HasMetadata)
         {
-            foreach (var entry in original.Metadata)
+            foreach (KeyValuePair<string, object> entry in original.Metadata)
             {
                 result.Metadata.Add(entry.Key, entry.Value);
             }

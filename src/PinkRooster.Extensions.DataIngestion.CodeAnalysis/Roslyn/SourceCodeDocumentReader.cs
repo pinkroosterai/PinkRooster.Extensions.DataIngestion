@@ -13,11 +13,11 @@ public sealed class SourceCodeDocumentReader : IngestionDocumentReader
     {
         ArgumentNullException.ThrowIfNull(source);
         cancellationToken.ThrowIfCancellationRequested();
-        using var reader = new StreamReader(source, leaveOpen: true);
+        using StreamReader reader = new StreamReader(source, leaveOpen: true);
         string text = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-        var document = new IngestionDocument(identifier);
-        var section = new IngestionDocumentSection();
-        var element = new IngestionDocumentParagraph(text);
+        IngestionDocument document = new IngestionDocument(identifier);
+        IngestionDocumentSection section = new IngestionDocumentSection();
+        IngestionDocumentParagraph element = new IngestionDocumentParagraph(text);
         element.Metadata[SourceMarker] = true;
         section.Elements.Add(element);
         document.Sections.Add(section);

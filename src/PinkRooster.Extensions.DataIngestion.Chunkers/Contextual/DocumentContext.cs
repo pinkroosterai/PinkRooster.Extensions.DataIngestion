@@ -13,9 +13,9 @@ internal sealed class DocumentContext
 
     internal DocumentContext(IngestionDocument document, TokenBudget budget, int overlap, CancellationToken cancellationToken)
     {
-        var text = new StringBuilder();
+        StringBuilder text = new StringBuilder();
         List<HeadingRange> headings = [];
-        foreach (var section in document.Sections)
+        foreach (IngestionDocumentSection section in document.Sections)
         {
             AppendSection(section, [], text, headings, cancellationToken);
         }
@@ -74,7 +74,7 @@ internal sealed class DocumentContext
             }
         }
 
-        var (start, end) = _windows[low];
+        (int start, int end) = _windows[low];
         return _text.AsMemory(start, end - start);
     }
 
@@ -239,7 +239,7 @@ internal sealed class DocumentContext
 
     private static string Normalize(string text, CancellationToken cancellationToken, List<int>? offsets = null)
     {
-        var normalized = new StringBuilder(text.Length);
+        StringBuilder normalized = new StringBuilder(text.Length);
         int whitespace = -1;
         for (int i = 0; i < text.Length; i++)
         {

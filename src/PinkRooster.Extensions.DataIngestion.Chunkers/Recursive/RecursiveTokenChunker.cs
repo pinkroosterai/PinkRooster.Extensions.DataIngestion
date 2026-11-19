@@ -67,7 +67,7 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
         IngestionDocument document, IngestionDocumentSection section,
         List<(int Level, string Text)> headings, CancellationToken cancellationToken)
     {
-        using var buffer = new PooledText();
+        using PooledText buffer = new PooledText();
         string? context = Breadcrumb(headings);
         bool followingProse = false;
         foreach (IngestionDocumentElement element in section.Elements)
