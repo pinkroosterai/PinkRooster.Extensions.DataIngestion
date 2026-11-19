@@ -56,13 +56,25 @@ Showcases syntax-aware C# source code chunking:
 
 ---
 
+## Terminal Presentation & Visual Formatting
+
+The console showcase uses [Spectre.Console](https://spectreconsole.net/) to provide a rich, responsive terminal UI:
+- **Rounded Box Cards:** Each chunk is rendered in a closed, rounded border panel (`╭───╮`, `│   │`, `╰───╯`) with automatic word wrapping.
+- **Token Capacity Heat-Meter:** Real-time visual progress meter and percentage badge (`[██████░░] 45/64 tok (70%)`) with semantic color coding (green < 75%, yellow 75–95%, bold red > 95%).
+- **Hierarchical Breadcrumbs:** Transforms raw Markdown header syntax into clean navigation chevrons (`Logistics › Freight Schedules › Transit Matrix`).
+- **Situational Retrieval Callouts:** Showcases Anthropic-style contextual enrichment by highlighting LLM situational headers in dedicated callout panels (`💡 Situational Retrieval Context`).
+- **Execution Summary Table:** Compares chunk counts, token totals, average chunk density, and execution duration across scenarios in an aligned, bordered data table.
+- **Redirection Resiliency:** Automatically detects `Console.IsOutputRedirected` and `NO_COLOR` to gracefully strip ANSI escape codes when piping output to files or CI logs.
+
+---
+
 ## Architecture & Code Structure
 
 ```text
 samples/PinkRooster.Extensions.DataIngestion.Samples/
 ├── Program.cs                                    # Entry point, CLI argument parsing & quickstart anchor
 ├── Formatting/
-│   └── ConsoleFormatter.cs                       # Visual chunk card formatting and summary tables
+│   └── ConsoleFormatter.cs                       # Spectre.Console card formatting, heat meters & summary tables
 └── Scenarios/
     ├── ISampleScenario.cs                        # Scenario runner contract
     ├── ScenarioResult.cs                         # Execution results and generated chunks

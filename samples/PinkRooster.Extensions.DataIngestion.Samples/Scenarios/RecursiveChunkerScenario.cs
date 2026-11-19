@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.DataIngestion;
 using Microsoft.ML.Tokenizers;
 using PinkRooster.Extensions.DataIngestion.Chunkers;
@@ -32,6 +33,7 @@ public sealed class RecursiveChunkerScenario : ISampleScenario
     /// <inheritdoc/>
     public async Task<ScenarioResult> RunAsync(CancellationToken cancellationToken = default)
     {
+        var stopwatch = Stopwatch.StartNew();
         ConsoleFormatter.PrintScenarioHeader(Name, Description);
 
         var options = new RecursiveChunkerOptions(_tokenizer)
@@ -58,8 +60,9 @@ public sealed class RecursiveChunkerScenario : ISampleScenario
             ConsoleFormatter.PrintChunk("RecursiveTokenChunker", ++chunkIndex, chunk, tokens, options.MaxTokensPerChunk);
         }
 
+        stopwatch.Stop();
         var result = new ScenarioResult(Name, chunks.Count, totalTokens, chunks);
-        ConsoleFormatter.PrintScenarioSummary(result, TimeSpan.Zero);
+        ConsoleFormatter.PrintScenarioSummary(result, stopwatch.Elapsed);
         return result;
     }
 

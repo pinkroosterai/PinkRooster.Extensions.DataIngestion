@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.DataIngestion;
 using Microsoft.ML.Tokenizers;
 using PinkRooster.Extensions.DataIngestion.CodeAnalysis;
 using PinkRooster.Extensions.DataIngestion.Samples.Formatting;
+using Spectre.Console;
 
 namespace PinkRooster.Extensions.DataIngestion.Samples.Scenarios;
 
@@ -34,6 +36,7 @@ public sealed class RoslynCodeChunkerScenario : ISampleScenario
     /// <inheritdoc/>
     public async Task<ScenarioResult> RunAsync(CancellationToken cancellationToken = default)
     {
+        var stopwatch = Stopwatch.StartNew();
         ConsoleFormatter.PrintScenarioHeader(Name, Description);
 
         var roslynOptions = new RoslynChunkerOptions(_tokenizer)
@@ -53,7 +56,8 @@ public sealed class RoslynCodeChunkerScenario : ISampleScenario
         // -----------------------------------------------------------------------------------------
         // Part 1: Direct C# Source File Ingestion via SourceCodeDocumentReader
         // -----------------------------------------------------------------------------------------
-        Console.WriteLine("\n>> [Part 1] Ingesting raw C# source code via SourceCodeDocumentReader...");
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[bold cyan]── Part 1: Ingesting raw C# source code via SourceCodeDocumentReader ──[/]");
         var reader = new SourceCodeDocumentReader();
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(SampleCSharpSource));
         var codeDoc = await reader.ReadAsync(stream, "DispatchCoordinator.cs", "text/x-csharp", cancellationToken).ConfigureAwait(false);
@@ -69,7 +73,8 @@ public sealed class RoslynCodeChunkerScenario : ISampleScenario
         // -----------------------------------------------------------------------------------------
         // Part 2: Syntax Chunking of Embedded ```csharp Fenced Blocks in Markdown
         // -----------------------------------------------------------------------------------------
-        Console.WriteLine("\n>> [Part 2] Extracting and syntax-chunking embedded C# from Markdown documentation...");
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[bold cyan]── Part 2: Extracting and syntax-chunking embedded C# from Markdown documentation ──[/]");
         var mdDoc = CreateMarkdownWithCSharp();
         await foreach (var chunk in chunker.ProcessAsync(mdDoc, cancellationToken).ConfigureAwait(false))
         {
@@ -79,8 +84,9 @@ public sealed class RoslynCodeChunkerScenario : ISampleScenario
             ConsoleFormatter.PrintChunk("Roslyn (Markdown Fenced)", ++chunkIndex, chunk, tokens, roslynOptions.MaxTokensPerChunk);
         }
 
+        stopwatch.Stop();
         var result = new ScenarioResult(Name, chunks.Count, totalTokens, chunks);
-        ConsoleFormatter.PrintScenarioSummary(result, TimeSpan.Zero);
+        ConsoleFormatter.PrintScenarioSummary(result, stopwatch.Elapsed);
         return result;
     }
 

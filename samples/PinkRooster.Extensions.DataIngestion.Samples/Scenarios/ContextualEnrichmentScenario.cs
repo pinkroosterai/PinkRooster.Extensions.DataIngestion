@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.DataIngestion;
 using Microsoft.ML.Tokenizers;
 using PinkRooster.Extensions.DataIngestion.Chunkers;
@@ -32,6 +33,7 @@ public sealed class ContextualEnrichmentScenario : ISampleScenario
     /// <inheritdoc/>
     public async Task<ScenarioResult> RunAsync(CancellationToken cancellationToken = default)
     {
+        var stopwatch = Stopwatch.StartNew();
         ConsoleFormatter.PrintScenarioHeader(Name, Description);
 
         // 1. Configure the recursive chunker with token headroom for contextual headers
@@ -85,8 +87,9 @@ public sealed class ContextualEnrichmentScenario : ISampleScenario
             ConsoleFormatter.PrintChunk("ContextualChunkProcessor", ++chunkIndex, chunk, tokens, 96);
         }
 
+        stopwatch.Stop();
         var result = new ScenarioResult(Name, chunks.Count, totalTokens, chunks);
-        ConsoleFormatter.PrintScenarioSummary(result, TimeSpan.Zero);
+        ConsoleFormatter.PrintScenarioSummary(result, stopwatch.Elapsed);
         return result;
     }
 
