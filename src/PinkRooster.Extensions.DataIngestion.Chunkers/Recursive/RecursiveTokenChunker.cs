@@ -10,6 +10,7 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
     private readonly ProseSplitter _splitter;
     private readonly int _overlap;
     private readonly ProtectedChunker? _protectedChunker;
+    private readonly bool _repeatTableHeaders;
 
     /// <summary>Initializes the chunker with a validated snapshot of its configuration.</summary>
     /// <param name="options">The chunker configuration, including its tokenizer.</param>
@@ -43,6 +44,7 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
         _splitter = new ProseSplitter(_budget, separators, options.KeepSeparator,
             separators.SequenceEqual(RecursiveChunkerOptions.DefaultSeparators, StringComparer.Ordinal));
         _overlap = options.OverlapTokens;
+        _repeatTableHeaders = options.RepeatTableHeaders;
         _protectedChunker = options.PreserveAtomicElements ? new ProtectedChunker(_budget) : null;
     }
 
@@ -117,10 +119,15 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
                 }
 
                 cancellationToken.ThrowIfCancellationRequested();
-                foreach (string chunk in _protectedChunker.Table(table, markdown, cancellationToken))
+                IReadOnlyList<string> tableParts = _protectedChunker.Table(table, markdown, cancellationToken);
+                for (int i = 0; i < tableParts.Count; i++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    yield return new IngestionChunk<string>(chunk, document, context);
+                    IngestionChunk<string> tableChunk = new(tableParts[i], document, context);
+                    tableChunk.Metadata["IsTablePart"] = true;
+                    tableChunk.Metadata["TablePartIndex"] = i;
+                    tableChunk.Metadata["IsTableContinuation"] = i > 0;
+                    yield return tableChunk;
                 }
 
                 followingProse = false;
@@ -131,12 +138,31 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
             int start = 0;
             if (_protectedChunker is not null)
             {
+                List<ProtectedRegion> regions = [];
                 foreach (MarkdownFence fence in MarkdownFence.Find(markdown, cancellationToken))
                 {
-                    foreach (string chunk in AddProse(buffer, markdown, start, fence.Start, elementName,
-                                 followingProse, cancellationToken))
+                    regions.Add(new ProtectedRegion(fence.Start, fence.End, fence, null));
+                }
+
+                if (_repeatTableHeaders)
+                {
+                    foreach (MarkdownTable mdTable in MarkdownTable.Find(markdown, cancellationToken))
                     {
-                        yield return new IngestionChunk<string>(chunk, document, context);
+                        regions.Add(new ProtectedRegion(mdTable.Start, mdTable.End, null, mdTable));
+                    }
+                }
+
+                regions.Sort((a, b) => a.Start.CompareTo(b.Start));
+
+                foreach (ProtectedRegion region in regions)
+                {
+                    if (region.Start > start)
+                    {
+                        foreach (string chunk in AddProse(buffer, markdown, start, region.Start, elementName,
+                                     followingProse, cancellationToken))
+                        {
+                            yield return new IngestionChunk<string>(chunk, document, context);
+                        }
                     }
 
                     if (Take(buffer) is { } text)
@@ -145,12 +171,22 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
                     }
 
                     cancellationToken.ThrowIfCancellationRequested();
-                    foreach (string chunk in _protectedChunker.Fence(markdown, fence, cancellationToken))
+                    if (region.Fence is { } fence)
                     {
-                        yield return new IngestionChunk<string>(chunk, document, context);
+                        foreach (string chunk in _protectedChunker.Fence(markdown, fence, cancellationToken))
+                        {
+                            yield return new IngestionChunk<string>(chunk, document, context);
+                        }
+                    }
+                    else if (region.Table is { } mdTable)
+                    {
+                        foreach (TableChunk part in _protectedChunker.Table(markdown, mdTable, cancellationToken))
+                        {
+                            yield return TableSplitter.CreateChunk(part, document, context);
+                        }
                     }
 
-                    start = fence.End;
+                    start = region.End;
                     followingProse = false;
                 }
             }
@@ -273,4 +309,6 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
 
         headings.Add((level, markdown));
     }
+
+    private readonly record struct ProtectedRegion(int Start, int End, MarkdownFence? Fence, MarkdownTable? Table);
 }

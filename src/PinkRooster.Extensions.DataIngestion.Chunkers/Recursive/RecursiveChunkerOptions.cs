@@ -24,4 +24,10 @@ public sealed class RecursiveChunkerOptions(Tokenizer tokenizer) : IngestionChun
 
     /// <summary>Gets or sets whether to protect structured tables and closed fences.</summary>
     public bool PreserveAtomicElements { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets whether to split oversized tables by rows and repeat table headers.
+    /// The default is <see langword="true"/>.
+    /// </summary>
+    public bool RepeatTableHeaders { get; set; } = true;
 }

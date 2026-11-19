@@ -4,6 +4,11 @@ namespace PinkRooster.Extensions.DataIngestion.Chunkers;
 
 internal sealed class ProtectedChunker(TokenBudget budget)
 {
+    private readonly TableSplitter _tableSplitter = new(budget);
+
+    internal IReadOnlyList<TableChunk> Table(string markdown, MarkdownTable table, CancellationToken cancellationToken) =>
+        _tableSplitter.Split(markdown, table, cancellationToken);
+
     internal IReadOnlyList<string> Table(IngestionDocumentTable table, string markdown, CancellationToken cancellationToken)
     {
         if (budget.Count(markdown) <= budget.Limit)

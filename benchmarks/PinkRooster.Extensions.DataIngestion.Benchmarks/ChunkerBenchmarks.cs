@@ -16,10 +16,12 @@ public class ChunkerThroughputBenchmarks
     private Tokenizer _tokenizer = null!;
     private IngestionDocument _proseDocument = null!;
     private IngestionDocument _csharpDocument = null!;
+    private IngestionDocument _tableDocument = null!;
     private DocumentTokenChunker _baselineProseChunker = null!;
     private RecursiveTokenChunker _recursiveChunker = null!;
     private DocumentTokenChunker _baselineCodeChunker = null!;
     private RoslynCodeChunker _roslynChunker = null!;
+    private MarkdownTableChunker _markdownTableChunker = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -93,6 +95,27 @@ public class ChunkerThroughputBenchmarks
             MaxTokensPerChunk = 64,
             OverlapTokens = 0,
         });
+
+        const string tableSource = """
+            | Endpoint | Method | Rate Limit | Auth Required | Cache TTL |
+            | :--- | :--- | ---: | :--- | ---: |
+            | /v1/ingest | POST | 100 req/min | Bearer Token | 0s |
+            | /v1/documents | GET | 500 req/min | API Key | 60s |
+            | /v1/chunks | GET | 1000 req/min | API Key | 120s |
+            | /v1/search | POST | 250 req/min | Bearer Token | 30s |
+            | /v1/health | GET | 5000 req/min | None | 5s |
+            """;
+
+        _tableDocument = new IngestionDocument("bench-table");
+        var tableSection = new IngestionDocumentSection();
+        tableSection.Elements.Add(new IngestionDocumentParagraph(tableSource));
+        _tableDocument.Sections.Add(tableSection);
+
+        _markdownTableChunker = new MarkdownTableChunker(new TableChunkerOptions(_tokenizer)
+        {
+            MaxTokensPerChunk = 64,
+            ReservedHeaderTokens = 0,
+        });
     }
 
     [Benchmark(Baseline = true, Description = "DocumentTokenChunker (Prose)")]
@@ -122,6 +145,17 @@ public class ChunkerThroughputBenchmarks
     {
         int count = 0;
         await foreach (var chunk in _roslynChunker.ProcessAsync(_csharpDocument))
+        {
+            count += chunk.Content.Length;
+        }
+        return count;
+    }
+
+    [Benchmark(Description = "MarkdownTableChunker (Table)")]
+    public async Task<int> TableChunking()
+    {
+        int count = 0;
+        await foreach (var chunk in _markdownTableChunker.ProcessAsync(_tableDocument))
         {
             count += chunk.Content.Length;
         }

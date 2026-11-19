@@ -115,6 +115,19 @@ public static partial class ConsoleFormatter
             items.Add(new Text(string.Empty));
         }
 
+        // 2c. Table Continuation & Metadata Callout
+        if (chunk.HasMetadata && chunk.Metadata.TryGetValue("IsTablePart", out var isTable) && isTable is true)
+        {
+            var isContinuation = chunk.Metadata.TryGetValue("IsTableContinuation", out var isCont) && isCont is true;
+            var partIndex = chunk.Metadata.TryGetValue("TablePartIndex", out var part) ? part : 0;
+            var range = chunk.Metadata.TryGetValue("TableRowRange", out var r) ? r : "all";
+            string tableLabel = isContinuation
+                ? $"[bold orange3]📊 Table Part #{partIndex} (Continuation • Rows: {range})[/]"
+                : $"[bold springgreen3]📊 Table Part #{partIndex} (Initial • Rows: {range})[/]";
+            items.Add(new Markup(tableLabel));
+            items.Add(new Text(string.Empty));
+        }
+
         // 2c. Chunk Content
         string content = chunk.Content.TrimEnd();
         items.Add(new Text(content, new Style(Color.White)));
