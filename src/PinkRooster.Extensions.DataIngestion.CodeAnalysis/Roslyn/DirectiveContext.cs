@@ -46,13 +46,14 @@ internal sealed class DirectiveContext
                     break;
                 case ElifDirectiveTriviaSyntax next when conditionals.Count > 0:
                     string[] previous = conditionals[^1].Tested;
-                    string[] tested = [.. previous, .. Names(next.Condition)];
-                    conditionals[^1] = new ConditionalBranch(tested, next.BranchTaken ? tested : []);
+                    string[] conditionNames = Names(next.Condition);
+                    string[] tested = [.. previous, .. conditionNames];
+                    conditionals[^1] = new ConditionalBranch(tested, next.BranchTaken ? conditionNames : []);
                     Record(next.FullSpan.End);
                     break;
                 case ElseDirectiveTriviaSyntax alternate when conditionals.Count > 0:
                     ConditionalBranch branch = conditionals[^1];
-                    conditionals[^1] = branch with { Active = alternate.BranchTaken ? branch.Tested : [] };
+                    conditionals[^1] = branch with { Active = [] };
                     Record(alternate.FullSpan.End);
                     break;
                 case EndIfDirectiveTriviaSyntax finish when conditionals.Count > 0:

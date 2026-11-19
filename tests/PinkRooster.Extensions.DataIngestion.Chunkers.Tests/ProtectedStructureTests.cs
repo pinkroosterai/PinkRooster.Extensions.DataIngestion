@@ -163,6 +163,22 @@ public sealed class ProtectedStructureTests
         AssertBudget(unprotected, 4);
     }
 
+    [Fact]
+    public async Task PartitionFallbackClampsSearchWindowOnOversizedFence()
+    {
+        const string Opening = "```text\n";
+        const string Closing = "```";
+        string body = string.Concat(Enumerable.Repeat("abcde 12345 ", 250));
+        string fence = Opening + body + "\n" + Closing;
+        int limit = 50;
+
+        var chunks = await ReadAsync(NewChunker(limit), Document(new IngestionDocumentParagraph(fence)));
+
+        chunks.Should().NotBeEmpty();
+        chunks.All(c => c.Content.StartsWith(Opening) && c.Content.EndsWith(Closing)).Should().BeTrue();
+        AssertBudget(chunks, limit);
+    }
+
     private static IngestionDocumentTable Table(string markdown, params string?[][] rows)
     {
         var cells = new IngestionDocumentElement?[rows.Length, rows[0].Length];

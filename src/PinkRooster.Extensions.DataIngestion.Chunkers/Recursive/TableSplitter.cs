@@ -52,7 +52,7 @@ internal sealed class TableSplitter(TokenBudget budget)
                     }
                 }
 
-                chunks.Add(new TableChunk(markdown.Substring(start, sliceLen), part++, part > 1, 0, 0));
+                chunks.Add(new TableChunk(markdown[start..(start + sliceLen)], part++, part > 1, 0, 0));
                 start += sliceLen;
             }
 
@@ -165,7 +165,7 @@ internal sealed class TableSplitter(TokenBudget budget)
             int prefixLen = TextBoundaries.FindPrefix(budget, markdown.AsSpan(currentStart, remainingLength), availableForPrefix, cancellationToken);
             if (prefixLen > 0)
             {
-                chunks.Add(new TableChunk(headerText + markdown.Substring(currentStart, prefixLen), partIndex, partIndex > 0, rowNumber, rowNumber));
+                chunks.Add(new TableChunk(string.Concat(headerText, markdown.AsSpan(currentStart, prefixLen)), partIndex, partIndex > 0, rowNumber, rowNumber));
                 partIndex++;
                 currentStart += prefixLen;
                 remainingLength -= prefixLen;
@@ -185,7 +185,7 @@ internal sealed class TableSplitter(TokenBudget budget)
                 }
             }
 
-            chunks.Add(new TableChunk(markdown.Substring(currentStart, len), partIndex, partIndex > 0, rowNumber, rowNumber));
+            chunks.Add(new TableChunk(markdown[currentStart..(currentStart + len)], partIndex, partIndex > 0, rowNumber, rowNumber));
             partIndex++;
             currentStart += len;
             remainingLength -= len;

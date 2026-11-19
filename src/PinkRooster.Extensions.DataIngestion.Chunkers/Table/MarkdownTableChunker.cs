@@ -168,7 +168,7 @@ public sealed class MarkdownTableChunker : IngestionChunker<string>
 
     private static void UpdateHeadings(List<(int Level, string Text)> headings, IngestionDocumentHeader header)
     {
-        int level = header.Level ?? 1;
+        int level = header.Level ?? int.MaxValue;
         string text = (header.GetMarkdown() ?? string.Empty).TrimStart('#', ' ').Trim();
         headings.RemoveAll(h => h.Level >= level);
         if (!string.IsNullOrWhiteSpace(text))

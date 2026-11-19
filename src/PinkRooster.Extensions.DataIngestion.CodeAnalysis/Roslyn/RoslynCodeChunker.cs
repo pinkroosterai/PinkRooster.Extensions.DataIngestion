@@ -162,13 +162,61 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
         }
 
         TextSpan tail = TextSpan.FromBounds(members[^1].FullSpan.End, span.End);
-        if (!source.AsSpan(tail.Start, tail.Length).Trim().Equals("}", StringComparison.Ordinal))
+        if (!IsStructuralTail(source.AsSpan(tail.Start, tail.Length)))
         {
             foreach (CodeSlice slice in Split(source, tail, null, scope.Context(), token))
             {
                 yield return slice;
             }
         }
+    }
+
+    private static bool IsStructuralTail(ReadOnlySpan<char> span)
+    {
+        ReadOnlySpan<char> trimmed = span.Trim();
+        if (trimmed.IsEmpty)
+        {
+            return true;
+        }
+
+        int i = 0;
+        while (i < trimmed.Length)
+        {
+            char ch = trimmed[i];
+            if (ch is '}' or ';' or ' ' or '\t' or '\r' or '\n')
+            {
+                i++;
+                continue;
+            }
+
+            if (ch == '#')
+            {
+                int next = trimmed[i..].IndexOf('\n');
+                i = next < 0 ? trimmed.Length : i + next + 1;
+                continue;
+            }
+
+            if (ch == '/' && i + 1 < trimmed.Length)
+            {
+                if (trimmed[i + 1] == '/')
+                {
+                    int next = trimmed[i..].IndexOf('\n');
+                    i = next < 0 ? trimmed.Length : i + next + 1;
+                    continue;
+                }
+
+                if (trimmed[i + 1] == '*')
+                {
+                    int next = trimmed[i..].IndexOf("*/", StringComparison.Ordinal);
+                    i = next < 0 ? trimmed.Length : i + next + 2;
+                    continue;
+                }
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     private IEnumerable<CodeSlice> Split(string source, TextSpan span, SyntaxNode? node, string? context,

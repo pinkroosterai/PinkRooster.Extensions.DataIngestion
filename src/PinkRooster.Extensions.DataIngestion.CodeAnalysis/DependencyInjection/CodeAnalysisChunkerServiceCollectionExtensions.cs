@@ -16,4 +16,16 @@ public static class CodeAnalysisChunkerServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(options);
         return services.AddSingleton<IngestionChunker<string>>(new RoslynCodeChunker(options));
     }
+
+    /// <summary>Registers a singleton Roslyn chunker using an options factory.</summary>
+    /// <param name="services">The collection to which the chunker is added.</param>
+    /// <param name="optionsFactory">Factory producing the chunker configuration from service provider.</param>
+    /// <returns>The service collection for chaining registrations.</returns>
+    public static IServiceCollection AddRoslynCodeChunker(
+        this IServiceCollection services, Func<IServiceProvider, RoslynChunkerOptions> optionsFactory)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(optionsFactory);
+        return services.AddSingleton<IngestionChunker<string>>(sp => new RoslynCodeChunker(optionsFactory(sp)));
+    }
 }

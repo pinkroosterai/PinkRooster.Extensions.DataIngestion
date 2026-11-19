@@ -30,12 +30,13 @@ internal readonly record struct MarkdownTable(
         }
 
         int start = 0;
+        int fenceCursor = 0;
         while (start < text.Length)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             // Skip any region covered by a code fence
-            int fenceIndex = FindEnclosingFence(fences, start);
+            int fenceIndex = FindEnclosingFence(fences, start, ref fenceCursor);
             if (fenceIndex >= 0)
             {
                 start = fences[fenceIndex].End;
@@ -78,7 +79,7 @@ internal readonly record struct MarkdownTable(
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // If current line enters a code fence, table ends
-                if (FindEnclosingFence(fences, current) >= 0)
+                if (FindEnclosingFence(fences, current, ref fenceCursor) >= 0)
                 {
                     break;
                 }
@@ -222,14 +223,16 @@ internal readonly record struct MarkdownTable(
         return -1;
     }
 
-    private static int FindEnclosingFence(List<MarkdownFence> fences, int index)
+    private static int FindEnclosingFence(List<MarkdownFence> fences, int index, ref int fenceCursor)
     {
-        for (int i = 0; i < fences.Count; i++)
+        while (fenceCursor < fences.Count && fences[fenceCursor].End <= index)
         {
-            if (index >= fences[i].Start && index < fences[i].End)
-            {
-                return i;
-            }
+            fenceCursor++;
+        }
+
+        if (fenceCursor < fences.Count && index >= fences[fenceCursor].Start && index < fences[fenceCursor].End)
+        {
+            return fenceCursor;
         }
 
         return -1;

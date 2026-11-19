@@ -42,10 +42,15 @@ internal sealed class DocumentContext
 
         string context = Normalize(chunk.Context ?? "", cancellationToken);
         HeadingRange[] matches = context.Length == 0 ? [] :
-            _headings.Where(heading => heading.Breadcrumb == context || heading.PlainBreadcrumb == context).ToArray();
+            _headings.Where(heading =>
+                heading.Breadcrumb == context ||
+                heading.PlainBreadcrumb == context ||
+                heading.StrippedBreadcrumb == context).ToArray();
         if (matches.Length == 0 && context.Length > 0)
         {
-            matches = _headings.Where(heading => heading.Leaf == context).ToArray();
+            matches = _headings.Where(heading =>
+                heading.Leaf == context ||
+                heading.StrippedLeaf == context).ToArray();
         }
 
         int? anchor = FindAnchor(chunk.Content, matches, cancellationToken);
@@ -232,10 +237,14 @@ internal sealed class DocumentContext
                 headings.Add(new HeadingRange(start, text.Length,
                     Normalize(string.Join(" > ", breadcrumbs.Select(item => item.Text)), cancellationToken),
                     Normalize(string.Join(" ", breadcrumbs.Select(item => item.Text)), cancellationToken),
-                    Normalize(breadcrumbs[^1].Text, cancellationToken)));
+                    Normalize(string.Join(" > ", breadcrumbs.Select(item => StripHeader(item.Text))), cancellationToken),
+                    Normalize(breadcrumbs[^1].Text, cancellationToken),
+                    Normalize(StripHeader(breadcrumbs[^1].Text), cancellationToken)));
             }
         }
     }
+
+    private static string StripHeader(string text) => text.TrimStart('#', ' ').Trim();
 
     private static string Normalize(string text, CancellationToken cancellationToken, List<int>? offsets = null)
     {
@@ -273,5 +282,12 @@ internal sealed class DocumentContext
         return normalized.ToString();
     }
 
-    private readonly record struct HeadingRange(int Start, int End, string Breadcrumb, string PlainBreadcrumb, string Leaf);
+    private readonly record struct HeadingRange(
+        int Start,
+        int End,
+        string Breadcrumb,
+        string PlainBreadcrumb,
+        string StrippedBreadcrumb,
+        string Leaf,
+        string StrippedLeaf);
 }

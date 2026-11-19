@@ -1,6 +1,7 @@
 # Public API for PinkRooster.Extensions.DataIngestion.CodeAnalysis
 PinkRooster.Extensions.DataIngestion.CodeAnalysis.CodeAnalysisChunkerServiceCollectionExtensions : System.Object
   method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddRoslynCodeChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.CodeAnalysis.RoslynChunkerOptions options)
+  method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddRoslynCodeChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, System.Func`2[System.IServiceProvider,PinkRooster.Extensions.DataIngestion.CodeAnalysis.RoslynChunkerOptions] optionsFactory)
 PinkRooster.Extensions.DataIngestion.CodeAnalysis.RoslynChunkerOptions : Microsoft.Extensions.DataIngestion.IngestionChunkerOptions
   ctor(Microsoft.ML.Tokenizers.Tokenizer tokenizer)
   property System.Boolean IncludeEnclosingTypeSignature { get; set; }

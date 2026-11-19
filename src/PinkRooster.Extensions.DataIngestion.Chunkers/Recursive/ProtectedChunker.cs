@@ -246,7 +246,7 @@ internal sealed class ProtectedChunker(TokenBudget budget)
         return ranges.Select(range => text[range]).ToArray();
     }
 
-    private static List<Range>? Partition(string text, int start, int end, Func<int, int> preferredEnd,
+    private List<Range>? Partition(string text, int start, int end, Func<int, int> preferredEnd,
         Func<int, int, bool> fits, CancellationToken cancellationToken)
     {
         List<Range> ranges = [];
@@ -281,7 +281,15 @@ internal sealed class ProtectedChunker(TokenBudget budget)
                 continue;
             }
 
-            for (int last = end; last >= TextBoundaries.NextScalar(text, first); last--)
+            int remaining = end - first;
+            int maxChars = budget.PrefixIndex(text.AsSpan(first, remaining), budget.Limit);
+            int maxLast = Math.Min(end, first + maxChars + 32);
+            while (maxLast < end && !TextBoundaries.IsScalarBoundary(text, maxLast))
+            {
+                maxLast++;
+            }
+
+            for (int last = maxLast; last >= TextBoundaries.NextScalar(text, first); last--)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (TextBoundaries.IsScalarBoundary(text, last) && nextBoundary[last - start] != 0 && fits(first, last))

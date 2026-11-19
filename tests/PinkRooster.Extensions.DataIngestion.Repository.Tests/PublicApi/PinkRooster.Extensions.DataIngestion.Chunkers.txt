@@ -19,9 +19,13 @@ PinkRooster.Extensions.DataIngestion.Chunkers.ContextualFailureMode : System.Enu
   field System.Int32 value__
 PinkRooster.Extensions.DataIngestion.Chunkers.DataIngestionChunkerServiceCollectionExtensions : System.Object
   method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddContextualChunkProcessor(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkerOptions options)
+  method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddContextualChunkProcessor(Microsoft.Extensions.DependencyInjection.IServiceCollection services, System.Func`2[System.IServiceProvider,PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkerOptions] optionsFactory)
   method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddHierarchicalTokenChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalChunkerOptions options)
+  method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddHierarchicalTokenChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, System.Func`2[System.IServiceProvider,PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalChunkerOptions] optionsFactory)
   method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddMarkdownTableChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.Chunkers.TableChunkerOptions options)
+  method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddMarkdownTableChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, System.Func`2[System.IServiceProvider,PinkRooster.Extensions.DataIngestion.Chunkers.TableChunkerOptions] optionsFactory)
   method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddRecursiveTokenChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveChunkerOptions options)
+  method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddRecursiveTokenChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, System.Func`2[System.IServiceProvider,PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveChunkerOptions] optionsFactory)
 PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalChunkerOptions : Microsoft.Extensions.DataIngestion.IngestionChunkerOptions
   ctor(Microsoft.ML.Tokenizers.Tokenizer tokenizer)
   method System.Void Validate()

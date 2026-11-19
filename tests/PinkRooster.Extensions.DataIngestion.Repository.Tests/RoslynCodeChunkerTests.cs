@@ -190,6 +190,45 @@ public sealed class RoslynCodeChunkerTests
         chunks.Should().OnlyContain(chunk => chunk.Content.Trim() != "}");
     }
 
+    [Fact]
+    public async Task ElseBranchDoesNotInheritActiveConditionSymbols()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var document = await ReadAsync("""
+            #if UNDEFINED_FEATURE
+            public class FeatureEnabled { }
+            #else
+            public class FeatureDisabled { }
+            #endif
+            """, token);
+        var chunks = await CollectAsync(new RoslynCodeChunker(Options(50)), document, token);
+
+        chunks.Should().ContainSingle();
+        chunks[0].Content.Should().Contain("FeatureDisabled");
+        chunks[0].Metadata.ContainsKey("conditional_symbols").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task NestedTypeTailBracesAndCommentsAreSuppressed()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var document = await ReadAsync("""
+            namespace Sample;
+
+            public class Outer
+            {
+                public class Inner
+                {
+                    public void Run() { }
+                }
+            } // end of outer
+            """, token);
+        var chunks = await CollectAsync(new RoslynCodeChunker(Options(50)), document, token);
+
+        chunks.Should().NotBeEmpty();
+        chunks.Should().NotContain(c => c.Content.Trim() == "}" || c.Content.Trim() == "}\n}" || c.Content.Trim().StartsWith("} //"));
+    }
+
     private static RoslynChunkerOptions Options(int limit) =>
         new(Tokenizer) { MaxTokensPerChunk = limit, OverlapTokens = 0, IncludeUsingDirectives = true };
 

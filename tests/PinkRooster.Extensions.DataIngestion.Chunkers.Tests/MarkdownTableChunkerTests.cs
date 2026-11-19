@@ -156,6 +156,33 @@ public sealed class MarkdownTableChunkerTests
     }
 
     [Fact]
+    public async Task TableChunkBreadcrumbResolvesInDocumentContext()
+    {
+        var doc = new IngestionDocument("doc-table-context");
+        var section = new IngestionDocumentSection();
+        section.Elements.Add(new IngestionDocumentHeader("# Overview") { Level = 1 });
+        section.Elements.Add(new IngestionDocumentHeader("## Datasets") { Level = 2 });
+        section.Elements.Add(new IngestionDocumentParagraph("| Name | Rows |\n| --- | --- |\n| Customers | 1000 |\n"));
+        doc.Sections.Add(section);
+
+        var chunker = new MarkdownTableChunker(Options(maxTokens: 200));
+        List<IngestionChunk<string>> chunks = [];
+        await foreach (var chunk in chunker.ProcessAsync(doc, TestContext.Current.CancellationToken))
+        {
+            chunks.Add(chunk);
+        }
+
+        chunks.Should().ContainSingle();
+        chunks[0].Context.Should().Be("Overview > Datasets");
+
+        var budget = new TokenBudget(Tokenizer, 200);
+        var documentContext = new DocumentContext(doc, budget, 0, TestContext.Current.CancellationToken);
+        var resolved = documentContext.Find(chunks[0], TestContext.Current.CancellationToken);
+        resolved.Should().NotBeNull();
+        resolved.Value.ToString().Should().Contain("Customers");
+    }
+
+    [Fact]
     public void ServiceCollectionExtensionRegistersMarkdownTableChunker()
     {
         var services = new ServiceCollection();

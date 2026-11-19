@@ -41,10 +41,29 @@ public sealed class PipelineTests
     {
         Action missingServices = () => DataIngestionChunkerServiceCollectionExtensions
             .AddRecursiveTokenChunker(null!, Options(5));
-        Action missingOptions = () => new ServiceCollection().AddRecursiveTokenChunker(null!);
+        Action missingOptions = () => new ServiceCollection().AddRecursiveTokenChunker((RecursiveChunkerOptions)null!);
+        Action missingFactory = () => new ServiceCollection().AddRecursiveTokenChunker((Func<IServiceProvider, RecursiveChunkerOptions>)null!);
 
         missingServices.Should().Throw<ArgumentNullException>().WithParameterName("services");
         missingOptions.Should().Throw<ArgumentNullException>().WithParameterName("options");
+        missingFactory.Should().Throw<ArgumentNullException>().WithParameterName("optionsFactory");
+    }
+
+    [Fact]
+    public void FactoryRegistrationsResolveConfiguredInstancesFromContainer()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<Microsoft.ML.Tokenizers.Tokenizer>(TokenizerFixture.Instance);
+        services.AddRecursiveTokenChunker(sp => new RecursiveChunkerOptions(sp.GetRequiredService<Microsoft.ML.Tokenizers.Tokenizer>()));
+        services.AddMarkdownTableChunker(sp => new TableChunkerOptions(sp.GetRequiredService<Microsoft.ML.Tokenizers.Tokenizer>()));
+        services.AddHierarchicalTokenChunker(sp => new HierarchicalChunkerOptions(sp.GetRequiredService<Microsoft.ML.Tokenizers.Tokenizer>()));
+        using var provider = services.BuildServiceProvider();
+
+        var chunkers = provider.GetServices<IngestionChunker<string>>().ToList();
+        chunkers.Should().HaveCount(3);
+        chunkers[0].Should().BeOfType<RecursiveTokenChunker>();
+        chunkers[1].Should().BeOfType<MarkdownTableChunker>();
+        chunkers[2].Should().BeOfType<HierarchicalTokenChunker>();
     }
 
     [Fact]
@@ -84,10 +103,12 @@ public sealed class PipelineTests
         using var client = ContextualChunkProcessorTests.Reply("unused");
         Action missingServices = () => DataIngestionChunkerServiceCollectionExtensions
             .AddContextualChunkProcessor(null!, ContextualChunkProcessorTests.Options(client));
-        Action missingOptions = () => new ServiceCollection().AddContextualChunkProcessor(null!);
+        Action missingOptions = () => new ServiceCollection().AddContextualChunkProcessor((ContextualChunkerOptions)null!);
+        Action missingFactory = () => new ServiceCollection().AddContextualChunkProcessor((Func<IServiceProvider, ContextualChunkerOptions>)null!);
 
         missingServices.Should().Throw<ArgumentNullException>().WithParameterName("services");
         missingOptions.Should().Throw<ArgumentNullException>().WithParameterName("options");
+        missingFactory.Should().Throw<ArgumentNullException>().WithParameterName("optionsFactory");
     }
 
     private static async Task<IReadOnlyList<IngestionChunk<string>>> RunAsync(
