@@ -1,0 +1,29 @@
+[
+  {
+    "id": "numeric-standard",
+    "path": "fixtures/numeric-standard.md",
+    "license": "CC-BY-4.0; MIT for code",
+    "origin": "https://github.com/dotnet/docs/blob/e813999fcd8dc0e9c549a95a0cb041c3dc5cb7d6/docs/standard/base-types/standard-numeric-format-strings.md",
+    "revision": "e813999fcd8dc0e9c549a95a0cb041c3dc5cb7d6",
+    "sha256": "7d8e7f0dda7a9ba1a3f576ad36b992ee5ba8a1920e83975d20e7c2814e4cb939",
+    "changes": "Local filename may differ. Content is copied as text with LF line endings."
+  },
+  {
+    "id": "numeric-custom",
+    "path": "fixtures/numeric-custom.md",
+    "license": "CC-BY-4.0; MIT for code",
+    "origin": "https://github.com/dotnet/docs/blob/e813999fcd8dc0e9c549a95a0cb041c3dc5cb7d6/docs/standard/base-types/custom-numeric-format-strings.md",
+    "revision": "e813999fcd8dc0e9c549a95a0cb041c3dc5cb7d6",
+    "sha256": "2db27bf2cb33ea71e28faba0845221abb28377693ca3bf3089da4b9a0b99cb8b",
+    "changes": "Local filename may differ. Content is copied as text with LF line endings."
+  },
+  {
+    "id": "enum-format",
+    "path": "fixtures/enum-format.md",
+    "license": "CC-BY-4.0; MIT for code",
+    "origin": "https://github.com/dotnet/docs/blob/e813999fcd8dc0e9c549a95a0cb041c3dc5cb7d6/docs/standard/base-types/enumeration-format-strings.md",
+    "revision": "e813999fcd8dc0e9c549a95a0cb041c3dc5cb7d6",
+    "sha256": "bd49fc99d71b026abf4b6816aaf9c7c82c3dae4c406d1a0b521095031e328682",
+    "changes": "Local filename may differ. Content is copied as text with LF line endings."
+  }
+]

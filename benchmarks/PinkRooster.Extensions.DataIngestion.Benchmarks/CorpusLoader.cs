@@ -123,7 +123,8 @@ internal static class CorpusLoader
             {
                 "CC-BY-4.0" => "NOTICE.md",
                 "CC-BY-4.0; MIT for code" => "LICENSE-MICROSOFT-CODE",
-                _ => throw new InvalidDataException($"Unsupported seed license for '{entry.Id}'."),
+                "MIT" => "LICENSE-DOTNET-FOUNDATION",
+                _ => throw new InvalidDataException($"Unsupported license for '{entry.Id}'."),
             };
         }
         else

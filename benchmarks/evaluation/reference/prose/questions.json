@@ -1,0 +1,131 @@
+[
+  {
+    "id": "standard-midpoint",
+    "sourceId": "numeric-standard",
+    "question": "In .NET Core 2.1 or later, how is an exact midpoint resolved when the precision controls fractional digits in a standard numeric format?",
+    "expectedAnswer": "The tied representation whose least significant digit is even is chosen.",
+    "evidence": [
+      {
+        "startLine": 28,
+        "endLine": 30,
+        "text": "  When *precision specifier* controls the number of fractional digits in the result string, the result string reflects a number that is rounded to a representable result nearest to the infinitely precise result. If there are two equally near representable results:\n  - **On .NET Framework and .NET Core up to .NET Core 2.0**, the runtime selects the result with the greater least significant digit (that is, using <xref:System.MidpointRounding.AwayFromZero?displayProperty=nameWithType>).\n  - **On .NET Core 2.1 and later**, the runtime selects the result with an even least significant digit (that is, using <xref:System.MidpointRounding.ToEven?displayProperty=nameWithType>)."
+      }
+    ]
+  },
+  {
+    "id": "standard-decimal-precision",
+    "sourceId": "numeric-standard",
+    "question": "When a standard decimal integer format needs more displayed digits than the value provides, how is the output extended and on which side?",
+    "expectedAnswer": "The decimal format pads with zeros on the left to meet the minimum digit count.",
+    "evidence": [
+      {
+        "startLine": 130,
+        "endLine": 134,
+        "text": "## Decimal format specifier (D)\n\nThe \"D\" (or decimal) format specifier converts a number to a string of decimal digits (0-9), prefixed by a minus sign if the number is negative. This format is supported only for integral types.\n\nThe precision specifier indicates the minimum number of digits desired in the resulting string. If required, the number is padded with zeros to its left to produce the number of digits given by the precision specifier. If no precision specifier is specified, the default is the minimum value required to represent the integer without leading zeros."
+      }
+    ]
+  },
+  {
+    "id": "standard-general-decimal",
+    "sourceId": "numeric-standard",
+    "question": "With the general format and no precision, what notation does the decimal type use and what happens to trailing zeros?",
+    "expectedAnswer": "It uses fixed-point notation and preserves trailing zeros.",
+    "evidence": [
+      {
+        "startLine": 190,
+        "endLine": 192,
+        "text": "## General format specifier (G)\n\nThe general (\"G\") format specifier converts a number to the more compact of either fixed-point or scientific notation, depending on the type of the number and whether a precision specifier is present. The precision specifier defines the maximum number of significant digits that can appear in the result string. If the precision specifier is omitted or zero, the type of the number determines the default precision, as indicated in the following table."
+      },
+      {
+        "startLine": 209,
+        "endLine": 209,
+        "text": "However, if the number is a <xref:System.Decimal> and the precision specifier is omitted, fixed-point notation is always used and trailing zeros are preserved."
+      }
+    ]
+  },
+  {
+    "id": "standard-round-trip-precision",
+    "sourceId": "numeric-standard",
+    "question": "Does supplying a precision for the standard round-trip numeric format change the number of digits?",
+    "expectedAnswer": "The round-trip format ignores the precision specifier.",
+    "evidence": [
+      {
+        "startLine": 275,
+        "endLine": 277,
+        "text": "## Round-trip format specifier (R)\n\nThe round-trip (\"R\") format specifier attempts to ensure that a numeric value that is converted to a string is parsed back into the same numeric value. This format is supported only for the <xref:System.Half>, <xref:System.Single>, <xref:System.Double>, and <xref:System.Numerics.BigInteger> types."
+      },
+      {
+        "startLine": 283,
+        "endLine": 283,
+        "text": "Although you can include a precision specifier, it is ignored. Round trips are given precedence over precision when using this specifier."
+      }
+    ]
+  },
+  {
+    "id": "custom-optional-zero",
+    "sourceId": "numeric-custom",
+    "question": "How do the two custom digit placeholders differ when the position would contain a nonsignificant zero?",
+    "expectedAnswer": "The zero placeholder outputs a zero when a digit is absent. The hash placeholder omits nonsignificant zeros.",
+    "evidence": [
+      {
+        "startLine": 48,
+        "endLine": 50,
+        "text": "## The \"0\" custom specifier\n\nThe \"0\" custom format specifier serves as a zero-placeholder symbol. If the value that is being formatted has a digit in the position where the zero appears in the format string, that digit is copied to the result string; otherwise, a zero appears in the result string. The position of the leftmost zero before the decimal point and the rightmost zero after the decimal point determines the range of digits that are always present in the result string."
+      },
+      {
+        "startLine": 63,
+        "endLine": 67,
+        "text": "## The \"#\" custom specifier\n\nThe \"#\" custom format specifier serves as a digit-placeholder symbol. If the value that is being formatted has a digit in the position where the \"#\" symbol appears in the format string, that digit is copied to the result string. Otherwise, nothing is stored in that position in the result string.\n\nNote that this specifier never displays a zero that is not a significant digit, even if zero is the only digit in the string. It will display zero only if it is a significant digit in the number that is being displayed."
+      }
+    ]
+  },
+  {
+    "id": "custom-decimal-position",
+    "sourceId": "numeric-custom",
+    "question": "With multiple periods in a custom numeric format, which period sets the position and what determines the emitted character?",
+    "expectedAnswer": "The first period sets the position. The active number format supplies the localized decimal separator.",
+    "evidence": [
+      {
+        "startLine": 85,
+        "endLine": 89,
+        "text": "## The \".\" custom specifier\n\nThe \".\" custom format specifier inserts a localized decimal separator into the result string. The first period in the format string determines the location of the decimal separator in the formatted value; any additional periods are ignored. If the format specifier ends with a \".\" only the significant digits are formatted into the result string.\n\nThe character that is used as the decimal separator in the result string is not always a period; it is determined by the <xref:System.Globalization.NumberFormatInfo.NumberDecimalSeparator> property of the <xref:System.Globalization.NumberFormatInfo> object that controls formatting."
+      }
+    ]
+  },
+  {
+    "id": "custom-commas",
+    "sourceId": "numeric-custom",
+    "question": "In a custom numeric format, what changes when commas are immediately before the decimal boundary instead of between integer placeholders?",
+    "expectedAnswer": "Each comma immediately before that boundary divides by one thousand. Commas between integer digit placeholders turn on grouping.",
+    "evidence": [
+      {
+        "startLine": 100,
+        "endLine": 104,
+        "text": "## The \",\" custom specifier\n\nThe \",\" character serves as both a group separator and a number scaling specifier.\n\n- Group separator: If one or more commas are specified between two digit placeholders (0 or #) that format the integral digits of a number, a group separator character is inserted between each number group in the integral part of the output."
+      },
+      {
+        "startLine": 108,
+        "endLine": 108,
+        "text": "- Number scaling specifier: If one or more commas are specified immediately to the left of the explicit or implicit decimal point, the number to be formatted is divided by 1000 for each comma. For example, if the string \"0,,\" is used to format the number 100 million, the output is \"100\"."
+      }
+    ]
+  },
+  {
+    "id": "custom-rounded-zero",
+    "sourceId": "numeric-custom",
+    "question": "In a three-section custom number format, what section is used if a negative number becomes zero after rounding?",
+    "expectedAnswer": "The resulting zero is formatted using the third section.",
+    "evidence": [
+      {
+        "startLine": 185,
+        "endLine": 187,
+        "text": "## The \";\" section separator\n\nThe semicolon (;) is a conditional format specifier that applies different formatting to a number depending on whether its value is positive, negative, or zero. To produce this behavior, a custom format string can contain up to three sections separated by semicolons. These sections are described in the following table."
+      },
+      {
+        "startLine": 193,
+        "endLine": 193,
+        "text": "|Three sections|The first section applies to positive values, the second section applies to negative values, and the third section applies to zeros.<br /><br /> The second section can be left empty (by having nothing between the semicolons), in which case the first section applies to all nonzero values.<br /><br /> If the number to be formatted is nonzero, but becomes zero after rounding according to the format in the first or second section, the resulting zero is formatted according to the third section.|"
+      }
+    ]
+  }
+]

@@ -1,0 +1,111 @@
+[
+  {
+    "id": "timer-cancel",
+    "sourceId": "runtime-periodic-timer",
+    "question": "If a caller cancels a wait for a periodic tick, does the timer itself stop?",
+    "expectedAnswer": "Cancellation affects only that wait. The timer continues firing.",
+    "evidence": [
+      {
+        "startLine": 123,
+        "endLine": 126,
+        "text": "        /// <summary>Wait for the next tick of the timer, or for the timer to be stopped.</summary>\n        /// <param name=\"cancellationToken\">\n        /// A <see cref=\"CancellationToken\"/> to use to cancel the asynchronous wait. If cancellation is requested, it affects only the single wait operation;\n        /// the underlying timer continues firing."
+      }
+    ]
+  },
+  {
+    "id": "timer-dispose",
+    "sourceId": "runtime-periodic-timer",
+    "question": "What result does an outstanding periodic tick wait produce when the timer is disposed?",
+    "expectedAnswer": "It completes with false. Subsequent waits also produce false.",
+    "evidence": [
+      {
+        "startLine": 144,
+        "endLine": 147,
+        "text": "        /// <summary>Stops the timer and releases associated managed resources.</summary>\n        /// <remarks>\n        /// <see cref=\"Dispose\"/> will cause an active wait with <see cref=\"WaitForNextTickAsync\"/> to complete with a value of false.\n        /// All subsequent <see cref=\"WaitForNextTickAsync\"/> invocations will produce a value of false."
+      }
+    ]
+  },
+  {
+    "id": "timer-coalescing",
+    "sourceId": "runtime-periodic-timer",
+    "question": "Are multiple ticks that arrive between periodic waits queued individually?",
+    "expectedAnswer": "They are coalesced into a single tick.",
+    "evidence": [
+      {
+        "startLine": 137,
+        "endLine": 139,
+        "text": "        /// The <see cref=\"PeriodicTimer\"/> behaves like an auto-reset event, in that multiple ticks are coalesced into a single tick if they occur between\n        /// calls to <see cref=\"WaitForNextTickAsync\"/>.  Similarly, a call to <see cref=\"Dispose\"/> will void any tick not yet consumed. <see cref=\"WaitForNextTickAsync\"/>\n        /// may only be used by one consumer at a time, and may be used concurrently with a single call to <see cref=\"Dispose\"/>."
+      }
+    ]
+  },
+  {
+    "id": "path-prefix-comparison",
+    "sourceId": "aspnetcore-path",
+    "question": "What comparison mode does the PathString prefix overload without explicit options use?",
+    "expectedAnswer": "It uses ordinal case-insensitive comparison.",
+    "evidence": [
+      {
+        "startLine": 221,
+        "endLine": 224,
+        "text": "    public bool StartsWithSegments(PathString other)\n    {\n        return StartsWithSegments(other, StringComparison.OrdinalIgnoreCase);\n    }"
+      }
+    ]
+  },
+  {
+    "id": "path-prefix-boundary",
+    "sourceId": "aspnetcore-path",
+    "question": "After a prefix comparison succeeds, what check prevents PathString from matching the middle of a segment?",
+    "expectedAnswer": "The two strings must have the same length or the next character in the candidate must be a slash.",
+    "evidence": [
+      {
+        "startLine": 239,
+        "endLine": 245,
+        "text": "    public bool StartsWithSegments(PathString other, StringComparison comparisonType)\n    {\n        var value1 = Value ?? string.Empty;\n        var value2 = other.Value ?? string.Empty;\n        if (value1.StartsWith(value2, comparisonType))\n        {\n            return value1.Length == value2.Length || value1[value2.Length] == '/';"
+      }
+    ]
+  },
+  {
+    "id": "path-join-slash",
+    "sourceId": "aspnetcore-path",
+    "question": "How does appending one nonempty PathString to another handle an already trailing slash in the first value?",
+    "expectedAnswer": "It skips the leading slash of the second value before concatenating.",
+    "evidence": [
+      {
+        "startLine": 354,
+        "endLine": 363,
+        "text": "    public PathString Add(PathString other)\n    {\n        if (HasValue &&\n            other.HasValue &&\n            Value[^1] is '/')\n        {\n            // If the path string has a trailing slash and the other string has a leading slash, we need\n            // to trim one of them.\n            var combined = string.Concat(Value.AsSpan(), other.Value.AsSpan(1));\n            return new PathString(combined);"
+      }
+    ]
+  },
+  {
+    "id": "query-empty-entry",
+    "sourceId": "aspnetcore-query",
+    "question": "When building a query from multi-valued entries, how is a key whose values are empty handled?",
+    "expectedAnswer": "The key is appended once with a null value.",
+    "evidence": [
+      {
+        "startLine": 143,
+        "endLine": 154,
+        "text": "    public static QueryString Create(IEnumerable<KeyValuePair<string, StringValues>> parameters)\n    {\n        var builder = new StringBuilder();\n        var first = true;\n\n        foreach (var pair in parameters)\n        {\n            // If nothing in this pair.Values, append null value and continue\n            if (StringValues.IsNullOrEmpty(pair.Value))\n            {\n                AppendKeyValuePair(builder, pair.Key, null, first);\n                first = false;"
+      },
+      {
+        "startLine": 279,
+        "endLine": 287,
+        "text": "    private static void AppendKeyValuePair(StringBuilder builder, string key, string? value, bool first)\n    {\n        builder.Append(first ? '?' : '&');\n        builder.Append(UrlEncoder.Default.Encode(key));\n        builder.Append('=');\n        if (!string.IsNullOrEmpty(value))\n        {\n            builder.Append(UrlEncoder.Default.Encode(value));\n        }"
+      }
+    ]
+  },
+  {
+    "id": "query-add-separator",
+    "sourceId": "aspnetcore-query",
+    "question": "When both QueryString values are substantive, how is the second query appended?",
+    "expectedAnswer": "An ampersand is inserted and the second string is appended without its leading question mark.",
+    "evidence": [
+      {
+        "startLine": 173,
+        "endLine": 185,
+        "text": "    public QueryString Add(QueryString other)\n    {\n        if (!HasValue || Value.Equals(\"?\", StringComparison.Ordinal))\n        {\n            return other;\n        }\n        if (!other.HasValue || other.Value.Equals(\"?\", StringComparison.Ordinal))\n        {\n            return this;\n        }\n\n        // ?name1=value1 Add ?name2=value2 returns ?name1=value1&name2=value2\n        return new QueryString(string.Concat(Value, \"&\", other.Value.AsSpan(1)));"
+      }
+    ]
+  }
+]

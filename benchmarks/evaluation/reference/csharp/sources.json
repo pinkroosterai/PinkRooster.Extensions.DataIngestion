@@ -1,0 +1,38 @@
+[
+  {
+    "id": "runtime-periodic-timer",
+    "path": "fixtures/PeriodicTimer.cs",
+    "license": "MIT",
+    "origin": "https://github.com/dotnet/runtime/blob/3415b09c3d58ccea35657d8109af67d1c3aac381/src/libraries/System.Private.CoreLib/src/System/Threading/PeriodicTimer.cs",
+    "revision": "3415b09c3d58ccea35657d8109af67d1c3aac381",
+    "sha256": "8d513bef254621961b92e198c600f29dea267c08845412b5ae526d93784985de",
+    "changes": "Local filename may differ. Content is copied as text with LF line endings."
+  },
+  {
+    "id": "runtime-time-provider",
+    "path": "fixtures/TimeProvider.cs",
+    "license": "MIT",
+    "origin": "https://github.com/dotnet/runtime/blob/3415b09c3d58ccea35657d8109af67d1c3aac381/src/libraries/Common/src/System/TimeProvider.cs",
+    "revision": "3415b09c3d58ccea35657d8109af67d1c3aac381",
+    "sha256": "4a422dd542eb9bc7fb5e8fb2400de5c5e288c88a5539bb8c2c2e94640ec2da7f",
+    "changes": "Local filename may differ. Content is copied as text with LF line endings."
+  },
+  {
+    "id": "aspnetcore-path",
+    "path": "fixtures/PathString.cs",
+    "license": "MIT",
+    "origin": "https://github.com/dotnet/aspnetcore/blob/86088a4024f07c95be38e998332b35e9817cf59d/src/Http/Http.Abstractions/src/PathString.cs",
+    "revision": "86088a4024f07c95be38e998332b35e9817cf59d",
+    "sha256": "aabf8a63c6ca178e37c3c9a51ece600322f2e6acf798614e3eac002a0ba89b9c",
+    "changes": "Local filename may differ. Content is copied as text with LF line endings."
+  },
+  {
+    "id": "aspnetcore-query",
+    "path": "fixtures/QueryString.cs",
+    "license": "MIT",
+    "origin": "https://github.com/dotnet/aspnetcore/blob/86088a4024f07c95be38e998332b35e9817cf59d/src/Http/Http.Abstractions/src/QueryString.cs",
+    "revision": "86088a4024f07c95be38e998332b35e9817cf59d",
+    "sha256": "75db590e3d689066509187192e8c5908509413df855ef1ff5ee8f40cc6135fa7",
+    "changes": "Local filename may differ. Content is copied as text with LF line endings."
+  }
+]

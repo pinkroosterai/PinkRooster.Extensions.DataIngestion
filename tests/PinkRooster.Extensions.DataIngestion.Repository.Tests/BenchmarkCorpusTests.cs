@@ -40,6 +40,21 @@ public sealed class BenchmarkCorpusTests
     }
 
     [Fact]
+    public void DraftReferenceSuitesResolveWithoutRunningRetrieval()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var prose = CorpusLoader.Load(Path.Combine(Seed, "reference", "prose"), token);
+        var csharp = CorpusLoader.Load(Path.Combine(Seed, "reference", "csharp"), token);
+        prose.Sources.Should().HaveCount(3);
+        csharp.Sources.Should().HaveCount(4);
+        prose.Questions.Should().HaveCount(8);
+        csharp.Questions.Should().HaveCount(8);
+        prose.Questions.Should().NotContain(question => question.Evidence.Any(span => span.SourceId == "enum-format"));
+        csharp.Questions.Should().NotContain(question =>
+            question.Evidence.Any(span => span.SourceId == "runtime-time-provider"));
+    }
+
+    [Fact]
     public void OnlyVerifiedBodyTextMapsBackToItsOwnSource()
     {
         const string text = "repeat\n| column | value |\nrepeat\nfirst line\nsecond line";
