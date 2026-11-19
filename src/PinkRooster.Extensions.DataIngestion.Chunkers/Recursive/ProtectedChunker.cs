@@ -215,15 +215,29 @@ internal sealed class ProtectedChunker(TokenBudget budget)
 
     private IReadOnlyList<string> Lossless(string text, int start, int end, string element, CancellationToken cancellationToken)
     {
+        ReadOnlySpan<char> span = text.AsSpan(start, end - start);
+        int trimmedLength = span.TrimEnd().Length;
+        if (trimmedLength == 0)
+        {
+            return [];
+        }
+
+        int effectiveEnd = start + trimmedLength;
         bool Fits(int first, int last) =>
             !text.AsSpan(first, last - first).IsWhiteSpace() &&
             budget.Count(text.AsSpan(first, last - first)) <= budget.Limit;
 
         int PreferredEnd(int first) =>
-            first + TextBoundaries.FindPrefix(budget, text.AsSpan(first, end - first), budget.Limit, cancellationToken);
+            first + TextBoundaries.FindPrefix(budget, text.AsSpan(first, effectiveEnd - first), budget.Limit, cancellationToken);
 
-        List<Range> ranges = Partition(text, start, end, PreferredEnd, Fits, cancellationToken)
+        List<Range> ranges = Partition(text, start, effectiveEnd, PreferredEnd, Fits, cancellationToken)
             ?? throw TextBoundaries.NoFit(element, budget.Limit);
+
+        if (effectiveEnd < end && ranges.Count > 0)
+        {
+            ranges[^1] = ranges[^1].Start..end;
+        }
+
         return ranges.Select(range => text[range]).ToArray();
     }
 
@@ -262,10 +276,10 @@ internal sealed class ProtectedChunker(TokenBudget budget)
                 continue;
             }
 
-            for (int last = TextBoundaries.NextScalar(text, first); last <= end; last = TextBoundaries.NextScalar(text, last))
+            for (int last = end; last >= TextBoundaries.NextScalar(text, first); last--)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (nextBoundary[last - start] != 0 && fits(first, last))
+                if (TextBoundaries.IsScalarBoundary(text, last) && nextBoundary[last - start] != 0 && fits(first, last))
                 {
                     nextBoundary[first - start] = last;
                     break;

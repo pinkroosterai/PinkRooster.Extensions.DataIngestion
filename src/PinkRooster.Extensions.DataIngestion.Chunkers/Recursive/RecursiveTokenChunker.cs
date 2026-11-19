@@ -259,12 +259,18 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
 
     private static void UpdateHeadings(List<(int Level, string Text)> headings, IngestionDocumentHeader header)
     {
+        string markdown = header.GetMarkdown();
+        if (string.IsNullOrWhiteSpace(markdown))
+        {
+            return;
+        }
+
         int level = header.Level ?? int.MaxValue;
         while (headings.Count > 0 && headings[^1].Level >= level)
         {
             headings.RemoveAt(headings.Count - 1);
         }
 
-        headings.Add((level, header.GetMarkdown()));
+        headings.Add((level, markdown));
     }
 }

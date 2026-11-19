@@ -33,16 +33,24 @@ internal static class TextBoundaries
 
         // A tokenizer's reported boundary is advisory. A longer prefix can tokenize
         // differently or include the first nonblank scalar after leading whitespace.
+        int best = 0;
         for (int end = NextScalar(text, 0); end <= text.Length; end = NextScalar(text, end))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (end > candidate && !text[..end].IsWhiteSpace() && budget.Count(text[..end]) <= limit)
+            if (end > candidate && !text[..end].IsWhiteSpace())
             {
-                return end;
+                if (budget.Count(text[..end]) <= limit)
+                {
+                    best = end;
+                }
+                else
+                {
+                    break;
+                }
             }
         }
 
-        return 0;
+        return best;
     }
 
     internal static InvalidOperationException NoFit(string element, int limit) =>

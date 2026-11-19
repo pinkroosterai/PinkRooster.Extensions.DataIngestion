@@ -344,6 +344,33 @@ public sealed class ContextualSchedulingTests
         tailStopped.Task.IsCompletedSuccessfully.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void BatchSizeRejectsZeroOrNegative(int batchSize)
+    {
+        using var client = new ContextualChatClient((_, _, _) => Task.FromResult(Response("ok")));
+        var options = Options(client);
+        Action act = () => options.BatchSize = batchSize;
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public async Task NullChatResponseTextFallsBackOrThrows()
+    {
+        using var client = new ContextualChatClient((_, _, _) => Task.FromResult(new ChatResponse([])));
+        var chunk = Chunk("body content");
+        var options = Options(client);
+        options.FailureMode = ContextualFailureMode.FallbackToOriginalChunk;
+
+        var fallbackResult = await ReadAsync(new(options), chunk);
+        fallbackResult.Should().ContainSingle().Which.Should().Be(chunk);
+
+        options.FailureMode = ContextualFailureMode.Throw;
+        Func<Task> strict = () => ReadAsync(new(options), chunk);
+        await strict.Should().ThrowAsync<InvalidOperationException>().WithMessage("*no contextual header*");
+    }
+
     private static TaskCompletionSource Signal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private static ChatResponse Response(string text) => new(new ChatMessage(ChatRole.Assistant, text));

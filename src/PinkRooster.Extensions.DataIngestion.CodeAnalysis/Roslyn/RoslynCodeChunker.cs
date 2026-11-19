@@ -75,7 +75,7 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
                             document, slice.Context);
                         if (symbols.Length > 0)
                         {
-                            chunk.Metadata["conditional_symbols"] = symbols.ToArray();
+                            chunk.Metadata["conditional_symbols"] = symbols;
                         }
 
                         yield return chunk;
@@ -161,10 +161,13 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
             }
         }
 
-        foreach (CodeSlice slice in Split(source, TextSpan.FromBounds(members[^1].FullSpan.End, span.End),
-                     null, scope.Context(), token))
+        TextSpan tail = TextSpan.FromBounds(members[^1].FullSpan.End, span.End);
+        if (!source.AsSpan(tail.Start, tail.Length).Trim().Equals("}", StringComparison.Ordinal))
         {
-            yield return slice;
+            foreach (CodeSlice slice in Split(source, tail, null, scope.Context(), token))
+            {
+                yield return slice;
+            }
         }
     }
 

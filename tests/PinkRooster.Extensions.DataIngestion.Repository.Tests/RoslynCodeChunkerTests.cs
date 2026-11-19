@@ -165,6 +165,31 @@ public sealed class RoslynCodeChunkerTests
             .NotContain(assembly => assembly.Name!.StartsWith("Microsoft.CodeAnalysis", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task OversizedTypePartitionDoesNotEmitIsolatedClosingBraceChunks()
+    {
+        const string source = """
+            namespace Sample;
+            public class LargeClass
+            {
+                public void MethodOne()
+                {
+                    System.Console.WriteLine("one");
+                }
+                public void MethodTwo()
+                {
+                    System.Console.WriteLine("two");
+                }
+            }
+            """;
+        var token = TestContext.Current.CancellationToken;
+        var document = await ReadAsync(source, token);
+        var chunker = new RoslynCodeChunker(Options(15));
+        var chunks = await CollectAsync(chunker, document, token);
+        chunks.Should().NotBeEmpty();
+        chunks.Should().OnlyContain(chunk => chunk.Content.Trim() != "}");
+    }
+
     private static RoslynChunkerOptions Options(int limit) =>
         new(Tokenizer) { MaxTokensPerChunk = limit, OverlapTokens = 0, IncludeUsingDirectives = true };
 

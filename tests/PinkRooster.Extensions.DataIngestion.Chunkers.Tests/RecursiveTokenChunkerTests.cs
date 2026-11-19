@@ -200,6 +200,38 @@ public sealed class RecursiveTokenChunkerTests
         await after.Should().ThrowAsync<OperationCanceledException>();
     }
 
+    [Fact]
+    public async Task ProtectedBlockWithTrailingWhitespaceDoesNotThrowNoFit()
+    {
+        string tableWithTrailing = """
+            | Column A | Column B |
+            | --- | --- |
+            | Value 1 | Value 2 |
+            | Value 3 | Value 4 |
+            
+
+            """;
+        var table = new IngestionDocumentTable(tableWithTrailing, new IngestionDocumentElement?[3, 2]);
+        var document = Document(table);
+        var chunker = NewChunker(15);
+        var chunks = await ReadAsync(chunker, document);
+        chunks.Should().NotBeEmpty();
+        AssertBudget(chunks, 15);
+    }
+
+    [Fact]
+    public async Task BlankHeadersAreIgnoredInBreadcrumbs()
+    {
+        var h1 = Header("Parent Title", 1);
+        var blank = Header("   ", 2);
+        var p = new IngestionDocumentParagraph("Paragraph content under parent.");
+        var document = Document(h1, blank, p);
+        var chunker = NewChunker(50);
+        var chunks = await ReadAsync(chunker, document);
+        chunks.Should().ContainSingle();
+        chunks[0].Context.Should().Be("Parent Title");
+    }
+
     internal static RecursiveChunkerOptions Options(int limit, int overlap = 0) => new(TokenizerFixture.Instance)
     {
         OverlapTokens = overlap,

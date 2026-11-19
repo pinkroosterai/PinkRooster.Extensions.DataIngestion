@@ -35,6 +35,7 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
         ArgumentOutOfRangeException.ThrowIfNegative(options.BucketOverlapTokens);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(options.BucketOverlapTokens, options.MaxDocumentContextTokens);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.MaxDegreeOfParallelism);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.BatchSize);
         if (!Enum.IsDefined(options.FailureMode))
         {
             throw new ArgumentOutOfRangeException(nameof(options.FailureMode));
@@ -126,6 +127,7 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
                     await admission.WaitAsync(cancellationToken).ConfigureAwait(false);
                     if (!await enumerator.MoveNextAsync())
                     {
+                        admission.Release();
                         break;
                     }
 
@@ -207,7 +209,7 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
         {
             response = await _chatClient.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
-            header = response.Text.Trim();
+            header = response.Text?.Trim() ?? string.Empty;
             if (header.Length == 0)
             {
                 throw new InvalidOperationException("The chat client returned no contextual header.");
@@ -257,7 +259,22 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
         }
 
         using PooledText content = new PooledText();
-        for (int end = header.Length; end > 0; end--)
+        content.Append(header);
+        content.Append(Separator);
+        content.Append(chunk.Content);
+        if (budget.Count(content.Span) <= budget.Limit)
+        {
+            return CopyChunk(chunk, header, content.ToString());
+        }
+
+        int availableTokens = budget.Limit - budget.Count(chunk.Content) - budget.Count(Separator);
+        if (availableTokens <= 0)
+        {
+            return chunk;
+        }
+
+        int candidate = Math.Clamp(budget.PrefixIndex(header, availableTokens), 0, header.Length);
+        for (int end = candidate; end > 0; end--)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!TextBoundaries.IsScalarBoundary(header, end))

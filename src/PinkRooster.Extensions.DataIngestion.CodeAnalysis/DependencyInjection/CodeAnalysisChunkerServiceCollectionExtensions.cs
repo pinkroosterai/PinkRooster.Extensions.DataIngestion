@@ -13,6 +13,7 @@ public static class CodeAnalysisChunkerServiceCollectionExtensions
     public static IServiceCollection AddRoslynCodeChunker(this IServiceCollection services, RoslynChunkerOptions options)
     {
         ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(options);
         return services.AddSingleton<IngestionChunker<string>>(new RoslynCodeChunker(options));
     }
 }

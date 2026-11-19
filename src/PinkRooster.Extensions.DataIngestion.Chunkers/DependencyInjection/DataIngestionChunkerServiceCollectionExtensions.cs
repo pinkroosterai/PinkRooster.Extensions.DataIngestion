@@ -14,6 +14,7 @@ public static class DataIngestionChunkerServiceCollectionExtensions
         this IServiceCollection services, RecursiveChunkerOptions options)
     {
         ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(options);
         return services.AddSingleton<IngestionChunker<string>>(new RecursiveTokenChunker(options));
     }
 
@@ -25,6 +26,7 @@ public static class DataIngestionChunkerServiceCollectionExtensions
         this IServiceCollection services, ContextualChunkerOptions options)
     {
         ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(options);
         return services.AddSingleton<IngestionChunkProcessor<string>>(new ContextualChunkProcessor(options));
     }
 }
