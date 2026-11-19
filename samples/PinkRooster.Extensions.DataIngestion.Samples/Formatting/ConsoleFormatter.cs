@@ -128,7 +128,27 @@ public static partial class ConsoleFormatter
             items.Add(new Text(string.Empty));
         }
 
-        // 2c. Chunk Content
+        // 2d. Hierarchical Parent-Child Callout
+        if (chunk.HasMetadata && chunk.Metadata.TryGetValue("ChunkRole", out var roleObj) && roleObj is string role)
+        {
+            var chunkId = chunk.Metadata.TryGetValue("ChunkId", out var id) ? id : "";
+            if (role == "Parent")
+            {
+                var childCount = chunk.Metadata.TryGetValue("ChildCount", out var cc) ? cc : 0;
+                items.Add(new Markup($"[bold purple]👑 Parent Chunk • ID: {Markup.Escape(chunkId.ToString()!)} • Children: {childCount}[/]"));
+                items.Add(new Text(string.Empty));
+            }
+            else if (role == "Child")
+            {
+                var parentId = chunk.Metadata.TryGetValue("ParentId", out var pid) ? pid : "";
+                var childIndex = chunk.Metadata.TryGetValue("ChildIndex", out var ci) ? ci : 0;
+                var childCount = chunk.Metadata.TryGetValue("ChildCount", out var cc) ? cc : 0;
+                items.Add(new Markup($"[bold skyblue1]🌱 Child Chunk #{childIndex} of {childCount} • Parent: {Markup.Escape(parentId.ToString()!)} • ID: {Markup.Escape(chunkId.ToString()!)}[/]"));
+                items.Add(new Text(string.Empty));
+            }
+        }
+
+        // 2e. Chunk Content
         string content = chunk.Content.TrimEnd();
         items.Add(new Text(content, new Style(Color.White)));
 

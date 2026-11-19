@@ -21,10 +21,10 @@ public static class Program
     {
         string scenario = args.Length > 0 ? args[0].ToLowerInvariant().Trim() : "all";
 
-        if (scenario is not ("all" or "recursive" or "contextual" or "roslyn"))
+        if (scenario is not ("all" or "recursive" or "contextual" or "roslyn" or "hierarchical"))
         {
             Console.Error.WriteLine($"Error: Unknown scenario '{scenario}'.");
-            Console.WriteLine("Usage: dotnet run --project samples/PinkRooster.Extensions.DataIngestion.Samples -- [all | recursive | contextual | roslyn]");
+            Console.WriteLine("Usage: dotnet run --project samples/PinkRooster.Extensions.DataIngestion.Samples -- [all | recursive | contextual | roslyn | hierarchical]");
             return 1;
         }
 
@@ -62,6 +62,7 @@ public static class Program
         var scenarios = new Dictionary<string, ISampleScenario>(StringComparer.OrdinalIgnoreCase)
         {
             ["recursive"] = new RecursiveChunkerScenario(tokenizer),
+            ["hierarchical"] = new HierarchicalChunkerScenario(tokenizer),
             ["contextual"] = new ContextualEnrichmentScenario(tokenizer),
             ["roslyn"] = new RoslynCodeChunkerScenario(tokenizer),
         };
@@ -77,7 +78,7 @@ public static class Program
         }
         else
         {
-            throw new ArgumentException($"Unknown scenario '{scenarioName}'. Valid scenarios are: all, recursive, contextual, roslyn.", nameof(scenarioName));
+            throw new ArgumentException($"Unknown scenario '{scenarioName}'. Valid scenarios are: all, recursive, hierarchical, contextual, roslyn.", nameof(scenarioName));
         }
 
         var results = new List<ScenarioResult>();
@@ -114,6 +115,7 @@ public static class Program
         ISampleScenario scenario = scenarioName.ToLowerInvariant().Trim() switch
         {
             "recursive" => new RecursiveChunkerScenario(tokenizer),
+            "hierarchical" => new HierarchicalChunkerScenario(tokenizer),
             "contextual" => new ContextualEnrichmentScenario(tokenizer),
             "roslyn" => new RoslynCodeChunkerScenario(tokenizer),
             _ => throw new ArgumentException($"Unknown scenario '{scenarioName}'.", nameof(scenarioName)),

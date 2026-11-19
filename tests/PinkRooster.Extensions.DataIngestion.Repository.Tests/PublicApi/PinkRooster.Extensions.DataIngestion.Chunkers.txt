@@ -19,8 +19,23 @@ PinkRooster.Extensions.DataIngestion.Chunkers.ContextualFailureMode : System.Enu
   field System.Int32 value__
 PinkRooster.Extensions.DataIngestion.Chunkers.DataIngestionChunkerServiceCollectionExtensions : System.Object
   method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddContextualChunkProcessor(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkerOptions options)
+  method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddHierarchicalTokenChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalChunkerOptions options)
   method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddMarkdownTableChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.Chunkers.TableChunkerOptions options)
   method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddRecursiveTokenChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveChunkerOptions options)
+PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalChunkerOptions : Microsoft.Extensions.DataIngestion.IngestionChunkerOptions
+  ctor(Microsoft.ML.Tokenizers.Tokenizer tokenizer)
+  method System.Void Validate()
+  property PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalEmissionMode EmissionMode { get; set; }
+  property System.Int32 ParentMaxTokens { get; set; }
+  property System.Int32 ParentOverlapTokens { get; set; }
+PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalEmissionMode : System.Enum
+  const PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalEmissionMode ChildrenOnly = 1
+  const PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalEmissionMode Interleaved = 0
+  const PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalEmissionMode ParentsOnly = 2
+  field System.Int32 value__
+PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalTokenChunker : Microsoft.Extensions.DataIngestion.IngestionChunker`1[System.String]
+  ctor(PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalChunkerOptions options)
+  method System.Collections.Generic.IAsyncEnumerable`1[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String]] ProcessAsync(Microsoft.Extensions.DataIngestion.IngestionDocument document, System.Threading.CancellationToken cancellationToken = null)
 PinkRooster.Extensions.DataIngestion.Chunkers.MarkdownTableChunker : Microsoft.Extensions.DataIngestion.IngestionChunker`1[System.String]
   ctor(PinkRooster.Extensions.DataIngestion.Chunkers.TableChunkerOptions options)
   method System.Collections.Generic.IAsyncEnumerable`1[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String]] ProcessAsync(Microsoft.Extensions.DataIngestion.IngestionDocument document, System.Threading.CancellationToken cancellationToken = null)

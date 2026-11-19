@@ -22,6 +22,7 @@ public class ChunkerThroughputBenchmarks
     private DocumentTokenChunker _baselineCodeChunker = null!;
     private RoslynCodeChunker _roslynChunker = null!;
     private MarkdownTableChunker _markdownTableChunker = null!;
+    private HierarchicalTokenChunker _hierarchicalChunker = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -116,6 +117,14 @@ public class ChunkerThroughputBenchmarks
             MaxTokensPerChunk = 64,
             ReservedHeaderTokens = 0,
         });
+
+        _hierarchicalChunker = new HierarchicalTokenChunker(new HierarchicalChunkerOptions(_tokenizer)
+        {
+            ParentMaxTokens = 256,
+            OverlapTokens = 16,
+            MaxTokensPerChunk = 64,
+            EmissionMode = HierarchicalEmissionMode.Interleaved,
+        });
     }
 
     [Benchmark(Baseline = true, Description = "DocumentTokenChunker (Prose)")]
@@ -156,6 +165,17 @@ public class ChunkerThroughputBenchmarks
     {
         int count = 0;
         await foreach (var chunk in _markdownTableChunker.ProcessAsync(_tableDocument))
+        {
+            count += chunk.Content.Length;
+        }
+        return count;
+    }
+
+    [Benchmark(Description = "HierarchicalTokenChunker (Parent-Child)")]
+    public async Task<int> HierarchicalChunking()
+    {
+        int count = 0;
+        await foreach (var chunk in _hierarchicalChunker.ProcessAsync(_proseDocument))
         {
             count += chunk.Content.Length;
         }

@@ -113,6 +113,29 @@ public sealed class SampleTests
     }
 
     [Fact]
+    public async Task RunAsync_Hierarchical_YieldsLinkedParentsAndChildren()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var result = await Program.RunScenarioAsync("hierarchical", token);
+
+        result.ChunkCount.Should().BeGreaterThan(0);
+        result.TotalTokens.Should().BeGreaterThan(0);
+
+        var parents = result.Chunks.Where(c => (string)c.Metadata["ChunkRole"] == "Parent").ToList();
+        var children = result.Chunks.Where(c => (string)c.Metadata["ChunkRole"] == "Child").ToList();
+
+        parents.Should().NotBeEmpty();
+        children.Should().NotBeEmpty();
+
+        foreach (var child in children)
+        {
+            child.Metadata.Should().ContainKey("ParentId");
+            child.Metadata.Should().ContainKey("ChildIndex");
+            parents.Should().Contain(p => (string)p.Metadata["ChunkId"] == (string)child.Metadata["ParentId"]);
+        }
+    }
+
+    [Fact]
     public async Task Main_WithValidAndInvalidArguments_ReturnsExpectedExitCodes()
     {
         int allCode = await Program.Main([]);

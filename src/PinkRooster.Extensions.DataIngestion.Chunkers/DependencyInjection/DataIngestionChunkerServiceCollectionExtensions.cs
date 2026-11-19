@@ -30,6 +30,18 @@ public static class DataIngestionChunkerServiceCollectionExtensions
         return services.AddSingleton<IngestionChunker<string>>(new MarkdownTableChunker(options));
     }
 
+    /// <summary>Registers a configured singleton hierarchical parent-child chunker as an ingestion chunker for strings.</summary>
+    /// <param name="services">The service collection to add the chunker to.</param>
+    /// <param name="options">The options used to construct and configure the chunker.</param>
+    /// <returns>The service collection for chaining registrations.</returns>
+    public static IServiceCollection AddHierarchicalTokenChunker(
+        this IServiceCollection services, HierarchicalChunkerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(options);
+        return services.AddSingleton<IngestionChunker<string>>(new HierarchicalTokenChunker(options));
+    }
+
     /// <summary>Registers a configured singleton contextual processor for string chunks.</summary>
     /// <param name="services">The service collection to add the processor to.</param>
     /// <param name="options">The options used to construct and configure the processor.</param>
