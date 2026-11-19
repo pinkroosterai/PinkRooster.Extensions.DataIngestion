@@ -66,12 +66,25 @@ var recursiveChunker = new RecursiveTokenChunker(recursiveOptions);
 
 ## Samples
 
-An end-to-end sample console pipeline demonstrating Markdown prose chunking, contextual enrichment, and C# AST chunking is available in [`samples/PinkRooster.Extensions.DataIngestion.Samples`](samples/PinkRooster.Extensions.DataIngestion.Samples).
+A comprehensive console sample showcasing all chunk types, structure-aware table continuation, contextual enrichment, and Roslyn AST code chunking is available in [`samples/PinkRooster.Extensions.DataIngestion.Samples`](samples/PinkRooster.Extensions.DataIngestion.Samples).
 
-Run the sample:
+Run all showcase scenarios sequentially:
 
 ```text
 dotnet run --project samples/PinkRooster.Extensions.DataIngestion.Samples
+```
+
+Run an individual chunker scenario:
+
+```text
+# Hierarchical Markdown prose, heading breadcrumbs, atomic fences & repeated table headers
+dotnet run --project samples/PinkRooster.Extensions.DataIngestion.Samples -- recursive
+
+# Contextual enrichment, prompt cache alignment, token capping & chunk filtering
+dotnet run --project samples/PinkRooster.Extensions.DataIngestion.Samples -- contextual
+
+# Syntax-aware C# AST chunking, primary constructors, trivia, conditional symbols & statement fallback
+dotnet run --project samples/PinkRooster.Extensions.DataIngestion.Samples -- roslyn
 ```
 
 ## Benchmarks & Evaluation

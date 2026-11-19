@@ -1,31 +1,46 @@
-using System.Text;
-using Microsoft.Extensions.AI;
-using Microsoft.Extensions.DataIngestion;
+using System.Diagnostics;
 using Microsoft.ML.Tokenizers;
 using PinkRooster.Extensions.DataIngestion.Chunkers;
-using PinkRooster.Extensions.DataIngestion.CodeAnalysis;
+using PinkRooster.Extensions.DataIngestion.Samples.Formatting;
+using PinkRooster.Extensions.DataIngestion.Samples.Scenarios;
 
 namespace PinkRooster.Extensions.DataIngestion.Samples;
 
 /// <summary>
-/// End-to-end sample application demonstrating RecursiveTokenChunker, ContextualChunkProcessor,
-/// and RoslynCodeChunker pipelines.
+/// Entry point for the PinkRooster.Extensions.DataIngestion sample console application.
+/// Demonstrates structure-aware recursive chunking, contextual enrichment, and Roslyn AST code chunking.
 /// </summary>
 public static class Program
 {
     /// <summary>
-    /// Entry point for sample console runner.
+    /// Command-line entry point. Accepts an optional scenario filter: [all | recursive | contextual | roslyn].
     /// </summary>
-    public static async Task Main() => await RunAsync();
+    /// <param name="args">Command-line arguments.</param>
+    /// <returns>Exit code (0 for success, non-zero for error).</returns>
+    public static async Task<int> Main(string[] args)
+    {
+        string scenario = args.Length > 0 ? args[0].ToLowerInvariant().Trim() : "all";
+
+        if (scenario is not ("all" or "recursive" or "contextual" or "roslyn"))
+        {
+            Console.Error.WriteLine($"Error: Unknown scenario '{scenario}'.");
+            Console.WriteLine("Usage: dotnet run --project samples/PinkRooster.Extensions.DataIngestion.Samples -- [all | recursive | contextual | roslyn]");
+            return 1;
+        }
+
+        int totalChunks = await RunAsync(scenario).ConfigureAwait(false);
+        return totalChunks > 0 ? 0 : 1;
+    }
 
     /// <summary>
-    /// Runs the sample pipeline and returns the total number of chunks generated.
+    /// Executes the sample pipeline for the specified scenario or all scenarios.
     /// </summary>
-    public static async Task<int> RunAsync()
+    /// <param name="scenarioName">The target scenario to execute: "all", "recursive", "contextual", or "roslyn".</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The total number of chunks generated across the executed scenarios.</returns>
+    public static async Task<int> RunAsync(string scenarioName = "all", CancellationToken cancellationToken = default)
     {
-        Console.WriteLine("================================================================================");
-        Console.WriteLine(" PinkRooster.Extensions.DataIngestion - End-to-End Pipeline Sample (.NET 10)");
-        Console.WriteLine("================================================================================");
+        ConsoleFormatter.PrintAppBanner();
 
         // quickstart:start
         var tokenizer = TiktokenTokenizer.CreateForModel("gpt-4o");
@@ -41,147 +56,69 @@ public static class Program
         var recursiveChunker = new RecursiveTokenChunker(recursiveOptions);
         // quickstart:end
 
-        // -----------------------------------------------------------------------------------------
-        // 1. Technical Markdown Prose Ingestion with RecursiveTokenChunker & ContextualChunkProcessor
-        // -----------------------------------------------------------------------------------------
-        Console.WriteLine("\n[1] Processing technical Markdown documentation with recursive chunking & contextual enrichment...");
+        // Suppress unused variable warning while preserving the quickstart synchronization snippet
+        _ = recursiveChunker;
 
-        var proseDoc = new IngestionDocument("docs/logistics-dispatch.md");
-        var proseSection = new IngestionDocumentSection();
-        proseSection.Elements.Add(new IngestionDocumentHeader("# Logistics & Fulfillment Dispatch Guide") { Level = 1 });
-        proseSection.Elements.Add(new IngestionDocumentParagraph(
-            "Standard customer orders ship within two business days from the regional distribution center. " +
-            "Priority express orders ship the same day when placed prior to 14:00 UTC."));
-
-        const string tableMarkdown = """
-            | Tier | Cutoff | SLA |
-            |---|---|---|
-            | Standard | 18:00 UTC | 2 business days |
-            """;
-        var cells = new IngestionDocumentElement?[2, 3]
+        var scenarios = new Dictionary<string, ISampleScenario>(StringComparer.OrdinalIgnoreCase)
         {
-            { new IngestionDocumentParagraph("Tier"), new IngestionDocumentParagraph("Cutoff"), new IngestionDocumentParagraph("SLA") },
-            { new IngestionDocumentParagraph("Standard"), new IngestionDocumentParagraph("18:00 UTC"), new IngestionDocumentParagraph("2 business days") },
+            ["recursive"] = new RecursiveChunkerScenario(tokenizer),
+            ["contextual"] = new ContextualEnrichmentScenario(tokenizer),
+            ["roslyn"] = new RoslynCodeChunkerScenario(tokenizer),
         };
-        var table = new IngestionDocumentTable(tableMarkdown, cells);
-        proseSection.Elements.Add(table);
-        proseDoc.Sections.Add(proseSection);
 
-        // Simulated IChatClient for deterministic contextual enrichment demonstration
-        var chatClient = new SampleContextualChatClient();
-        var contextualOptions = new ContextualChunkerOptions(chatClient, tokenizer)
+        List<ISampleScenario> toRun = [];
+        if (scenarioName.Equals("all", StringComparison.OrdinalIgnoreCase))
         {
-            EmbeddingTokenizer = tokenizer,
-            MaxEnrichedTokens = 128,
-        };
-        var contextualProcessor = new ContextualChunkProcessor(contextualOptions);
-
-        // Stream chunks through the chunker and contextual processor
-        var rawChunks = recursiveChunker.ProcessAsync(proseDoc);
-        var enrichedChunks = contextualProcessor.ProcessAsync(rawChunks);
-
-        int proseIndex = 0;
-        await foreach (var chunk in enrichedChunks)
+            toRun.AddRange(scenarios.Values);
+        }
+        else if (scenarios.TryGetValue(scenarioName, out var matched))
         {
-            int tokens = tokenizer.CountTokens(chunk.Content, considerNormalization: false);
-            Console.WriteLine($"\n--- Prose Chunk #{++proseIndex} ({tokens} tokens) ---");
-            if (!string.IsNullOrEmpty(chunk.Context))
-            {
-                Console.WriteLine($"Context: {chunk.Context}");
-            }
-            if (chunk.Metadata.TryGetValue("contextual_header", out var header))
-            {
-                Console.WriteLine($"Situational Header: \"{header}\"");
-            }
-            Console.WriteLine($"Content:\n{chunk.Content.Trim()}");
+            toRun.Add(matched);
+        }
+        else
+        {
+            throw new ArgumentException($"Unknown scenario '{scenarioName}'. Valid scenarios are: all, recursive, contextual, roslyn.", nameof(scenarioName));
         }
 
-        // -----------------------------------------------------------------------------------------
-        // 2. Syntax-Aware C# Source Code Ingestion with SourceCodeDocumentReader & RoslynCodeChunker
-        // -----------------------------------------------------------------------------------------
-        Console.WriteLine("\n\n[2] Ingesting and chunking C# source code with syntax awareness...");
+        var results = new List<ScenarioResult>();
+        var overallStopwatch = Stopwatch.StartNew();
 
-        const string csharpSource = """
-            namespace Logistics.Fulfillment;
-
-            /// <summary>Defines clock provider contract for dispatch calculation.</summary>
-            public interface IDispatchClock
-            {
-                DateTimeOffset UtcNow { get; }
-            }
-
-            /// <summary>Calculates dispatch deadlines and transit windows.</summary>
-            public sealed class DispatchCoordinator(IDispatchClock clock, int defaultLeadDays = 2)
-            {
-                /// <summary>Calculates shipping date for standard or priority orders.</summary>
-                public DateTimeOffset CalculateShipDate(bool isPriority)
-                {
-                    var now = clock.UtcNow;
-                    return isPriority ? now : now.AddDays(defaultLeadDays);
-                }
-
-                /// <summary>Determines if cutoff time has passed for today's dispatch.</summary>
-                public bool HasCutoffPassed(TimeOnly cutoffTime) =>
-                    TimeOnly.FromDateTime(clock.UtcNow.DateTime) > cutoffTime;
-            }
-            """;
-
-        var codeReader = new SourceCodeDocumentReader();
-        using var codeStream = new MemoryStream(Encoding.UTF8.GetBytes(csharpSource));
-        var codeDoc = await codeReader.ReadAsync(codeStream, "DispatchCoordinator.cs", "text/x-csharp");
-
-        var roslynOptions = new RoslynChunkerOptions(tokenizer)
+        foreach (var scenario in toRun)
         {
-            MaxTokensPerChunk = 64,
-            OverlapTokens = 0,
-            IncludeEnclosingTypeSignature = true,
-        };
-        var roslynChunker = new RoslynCodeChunker(roslynOptions);
-
-        int codeIndex = 0;
-        await foreach (var chunk in roslynChunker.ProcessAsync(codeDoc))
-        {
-            int tokens = tokenizer.CountTokens(chunk.Content, considerNormalization: false);
-            Console.WriteLine($"\n--- C# Code Chunk #{++codeIndex} ({tokens} tokens) ---");
-            if (!string.IsNullOrEmpty(chunk.Context))
-            {
-                Console.WriteLine($"Symbol Breadcrumb: {chunk.Context}");
-            }
-            Console.WriteLine($"Content:\n{chunk.Content.Trim()}");
+            cancellationToken.ThrowIfCancellationRequested();
+            var scenarioStopwatch = Stopwatch.StartNew();
+            var result = await scenario.RunAsync(cancellationToken).ConfigureAwait(false);
+            scenarioStopwatch.Stop();
+            results.Add(result);
         }
 
-        Console.WriteLine("\n================================================================================");
-        Console.WriteLine(" Sample execution completed successfully.");
-        Console.WriteLine("================================================================================");
+        overallStopwatch.Stop();
 
-        return proseIndex + codeIndex;
+        if (results.Count > 1)
+        {
+            ConsoleFormatter.PrintOverallSummary(results, overallStopwatch.Elapsed);
+        }
+
+        return results.Sum(r => r.ChunkCount);
     }
-}
 
-/// <summary>
-/// A lightweight sample chat client demonstrating contextual prompt resolution.
-/// </summary>
-file sealed class SampleContextualChatClient : IChatClient
-{
-    public ChatClientMetadata Metadata => new("SampleContextualClient");
-
-    public Task<ChatResponse> GetResponseAsync(
-        IEnumerable<ChatMessage> messages,
-        ChatOptions? options = null,
-        CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Executes a single named scenario and returns its detailed chunk result for verification.
+    /// </summary>
+    /// <param name="scenarioName">Scenario name: "recursive", "contextual", or "roslyn".</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The scenario execution result containing all generated chunks.</returns>
+    public static async Task<ScenarioResult> RunScenarioAsync(string scenarioName, CancellationToken cancellationToken = default)
     {
-        var response = new ChatResponse(new ChatMessage(ChatRole.Assistant,
-            "This document excerpt details logistics dispatch SLA rules and scheduling cutoff times."));
-        return Task.FromResult(response);
+        var tokenizer = TiktokenTokenizer.CreateForModel("gpt-4o");
+        ISampleScenario scenario = scenarioName.ToLowerInvariant().Trim() switch
+        {
+            "recursive" => new RecursiveChunkerScenario(tokenizer),
+            "contextual" => new ContextualEnrichmentScenario(tokenizer),
+            "roslyn" => new RoslynCodeChunkerScenario(tokenizer),
+            _ => throw new ArgumentException($"Unknown scenario '{scenarioName}'.", nameof(scenarioName)),
+        };
+
+        return await scenario.RunAsync(cancellationToken).ConfigureAwait(false);
     }
-
-    public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
-        IEnumerable<ChatMessage> messages,
-        ChatOptions? options = null,
-        CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException();
-
-    public object? GetService(Type serviceType, object? serviceKey = null) => null;
-
-    public void Dispose() { }
 }
