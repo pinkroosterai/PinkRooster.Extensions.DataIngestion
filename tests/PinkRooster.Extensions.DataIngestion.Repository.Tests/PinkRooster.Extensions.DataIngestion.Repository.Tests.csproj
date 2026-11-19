@@ -4,6 +4,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../benchmarks/PinkRooster.Extensions.DataIngestion.Benchmarks/PinkRooster.Extensions.DataIngestion.Benchmarks.csproj" />
     <ProjectReference Include="../../src/PinkRooster.Extensions.DataIngestion.Chunkers/PinkRooster.Extensions.DataIngestion.Chunkers.csproj" />
     <PackageReference Include="AwesomeAssertions" />
     <PackageReference Include="xunit.v3.mtp-v2" />
