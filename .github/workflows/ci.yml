@@ -15,6 +15,10 @@ jobs:
       - run: dotnet restore PinkRooster.Extensions.DataIngestion.slnx -p:NuGetAuditMode=all
       - run: dotnet build PinkRooster.Extensions.DataIngestion.slnx --no-restore
       - run: dotnet test --solution PinkRooster.Extensions.DataIngestion.slnx --no-build
+      - name: Run offline benchmark smoke check
+        run: |
+          benchmark_dll=benchmarks/PinkRooster.Extensions.DataIngestion.Benchmarks/bin/Debug/net10.0/PinkRooster.Extensions.DataIngestion.Benchmarks.dll
+          sudo unshare --net -- runuser -u "$(id -un)" -- "$(command -v dotnet)" "$benchmark_dll" smoke benchmarks/evaluation
       - name: Collect core line coverage
         run: >
           dotnet test --project tests/PinkRooster.Extensions.DataIngestion.Chunkers.Tests/PinkRooster.Extensions.DataIngestion.Chunkers.Tests.csproj
