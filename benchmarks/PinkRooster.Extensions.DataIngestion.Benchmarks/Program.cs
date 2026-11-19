@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BenchmarkDotNet.Running;
 using PinkRooster.Extensions.DataIngestion.Benchmarks;
 
 using var cancellation = new CancellationTokenSource();
@@ -28,32 +29,37 @@ internal static class BenchmarkConsole
     internal static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error,
         CancellationToken cancellationToken)
     {
-        if (args is not [SmokeEvaluation.Profile, var corpusRoot])
+        if (args is [SmokeEvaluation.Profile, var corpusRoot])
         {
-            await error.WriteLineAsync("Usage: smoke <corpus-directory>");
-            return 2;
+            BenchmarkReport report;
+            int exitCode;
+            try
+            {
+                report = await SmokeEvaluation.RunAsync(corpusRoot, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                exitCode = 0;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                report = new BenchmarkReport("incomplete", SmokeEvaluation.Profile, Reason: "cancelled");
+                exitCode = 130;
+            }
+            catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+                report = new BenchmarkReport("failed", SmokeEvaluation.Profile, Reason: failure.Message);
+                exitCode = 1;
+            }
+
+            await output.WriteLineAsync(JsonSerializer.Serialize(report, JsonOptions));
+            return exitCode;
         }
 
-        BenchmarkReport report;
-        int exitCode;
-        try
+        string[] benchmarkArgs = args switch
         {
-            report = await SmokeEvaluation.RunAsync(corpusRoot, cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
-            exitCode = 0;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            report = new BenchmarkReport("incomplete", SmokeEvaluation.Profile, Reason: "cancelled");
-            exitCode = 130;
-        }
-        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or InvalidDataException)
-        {
-            report = new BenchmarkReport("failed", SmokeEvaluation.Profile, Reason: failure.Message);
-            exitCode = 1;
-        }
-
-        await output.WriteLineAsync(JsonSerializer.Serialize(report, JsonOptions));
-        return exitCode;
+            ["--list"] => ["--list", "flat"],
+            _ => args,
+        };
+        var summaries = BenchmarkSwitcher.FromAssembly(typeof(BenchmarkConsole).Assembly).Run(benchmarkArgs);
+        return summaries.Any(s => s.HasCriticalValidationErrors) ? 1 : 0;
     }
 }
