@@ -5,7 +5,7 @@ using PinkRooster.Extensions.DataIngestion.Chunkers;
 
 namespace PinkRooster.Extensions.DataIngestion.Benchmarks;
 
-internal sealed record EvaluationChunk(string SourceId, int Ordinal, string Payload, SourceSlice? Source);
+internal sealed record EvaluationChunk(string SourceId, int Ordinal, string Payload, SourceSlice? Source, string? Context = null);
 
 internal static class SmokeChunking
 {
@@ -49,7 +49,7 @@ internal static class SmokeChunking
                 verified = SourceAttribution.Match(source, payload, start, trimmed.TrimEnd().Length);
             }
 
-            chunks.Add(new EvaluationChunk(source.Id, chunks.Count, payload, verified));
+            chunks.Add(new EvaluationChunk(source.Id, chunks.Count, payload, verified, chunk.Context));
         }
 
         return chunks;

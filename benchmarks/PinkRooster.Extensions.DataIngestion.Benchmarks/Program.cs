@@ -54,6 +54,31 @@ internal static class BenchmarkConsole
             return exitCode;
         }
 
+        if (args is [ReferenceEvaluation.Profile, var referenceRoot])
+        {
+            BenchmarkReport report;
+            int exitCode;
+            try
+            {
+                report = await ReferenceEvaluation.RunAsync(referenceRoot, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                exitCode = 0;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                report = new BenchmarkReport("incomplete", ReferenceEvaluation.Profile, Reason: "cancelled");
+                exitCode = 130;
+            }
+            catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+                report = new BenchmarkReport("failed", ReferenceEvaluation.Profile, Reason: failure.Message);
+                exitCode = 1;
+            }
+
+            await output.WriteLineAsync(JsonSerializer.Serialize(report, JsonOptions));
+            return exitCode;
+        }
+
         string[] benchmarkArgs = args switch
         {
             ["--list"] => ["--list", "flat"],
