@@ -54,8 +54,9 @@ internal static class TextBoundaries
     }
 
     /// <summary>
-    /// Returns the longest prefix that fits <paramref name="limit"/>, or, when not even the first scalar fits, that
-    /// first scalar alone, so callers always advance without splitting a surrogate pair.
+    /// Returns the longest prefix that fits <paramref name="limit"/> via token search; if none fits, returns the
+    /// estimated character prefix from <see cref="TokenBudget.PrefixIndex"/> aligned to a scalar boundary; if even that
+    /// is empty, returns the first scalar alone so callers always advance without splitting a surrogate pair.
     /// </summary>
     internal static int ForcedPrefix(
         TokenBudget budget, ReadOnlySpan<char> text, int limit, CancellationToken cancellationToken)

@@ -48,8 +48,7 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
         }
 
         _budget = new TokenBudget(options.Tokenizer, limit);
-        _splitter = new ProseSplitter(_budget, separators, options.KeepSeparator,
-            separators.SequenceEqual(RecursiveChunkerOptions.DefaultSeparators, StringComparer.Ordinal));
+        _splitter = new ProseSplitter(_budget, separators, options.KeepSeparator);
         _overlap = options.OverlapTokens;
         _newlineTokens = _budget.Count("\n");
         _repeatTableHeaders = options.RepeatTableHeaders;

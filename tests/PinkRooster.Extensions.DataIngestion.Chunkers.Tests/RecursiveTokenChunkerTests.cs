@@ -57,6 +57,40 @@ public sealed class RecursiveTokenChunkerTests
     }
 
     [Fact]
+    public async Task CustomSeparatorsWithNewlinePreservesCrlfPairWithoutSplitting()
+    {
+        var options = new RecursiveChunkerOptions(TokenizerFixture.Instance)
+        {
+            MaxTokensPerChunk = 5,
+            Separators = ["\n", " "]
+        };
+        var chunker = new RecursiveTokenChunker(options);
+        const string Text = "first line\r\nsecond line";
+        var chunks = await ReadAsync(chunker, Document(new IngestionDocumentParagraph(Text)));
+
+        chunks.Should().NotBeEmpty();
+        chunks.Should().AllSatisfy(c => c.Content.Should().NotEndWith("\r").And.NotStartWith("\n"));
+        string.Concat(chunks.Select(c => c.Content)).Should().Be(Text);
+    }
+
+    [Fact]
+    public async Task CustomSeparatorsWithSentenceSeparatorPreservesAbbreviations()
+    {
+        const string FirstSentence = "Dr. Lee visited. ";
+        const string SecondSentence = "Next sentence.";
+        int limit = Count(FirstSentence);
+        var options = new RecursiveChunkerOptions(TokenizerFixture.Instance)
+        {
+            MaxTokensPerChunk = limit,
+            Separators = [". ", " "]
+        };
+        var chunker = new RecursiveTokenChunker(options);
+        var chunks = await ReadAsync(chunker, Document(new IngestionDocumentParagraph(FirstSentence + SecondSentence)));
+
+        chunks.Select(c => c.Content).Should().Equal(FirstSentence, SecondSentence);
+    }
+
+    [Fact]
     public async Task TracksNestedAndFlatHeadingContextAndResumesParent()
     {
         var child = new IngestionDocumentSection();

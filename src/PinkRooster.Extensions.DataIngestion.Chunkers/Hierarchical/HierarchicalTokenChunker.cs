@@ -110,46 +110,49 @@ public sealed class HierarchicalTokenChunker : IngestionChunker<string>
             parentOut.Metadata[ChunkMetadataKeys.ChildCount] = childChunks.Count;
             parentOut.Metadata[ChunkMetadataKeys.ParentTokenCount] = parentTokenCount;
 
-            List<IngestionChunk<string>> enrichedChildren = new(childChunks.Count);
-            for (int c = 0; c < childChunks.Count; c++)
+            if (_emissionMode != HierarchicalEmissionMode.ParentsOnly)
             {
-                IngestionChunk<string> rawChild = childChunks[c];
-                string childId = $"{docId}#p{parentIndex}_c{c}";
+                List<IngestionChunk<string>> enrichedChildren = new(childChunks.Count);
+                for (int c = 0; c < childChunks.Count; c++)
+                {
+                    IngestionChunk<string> rawChild = childChunks[c];
+                    string childId = $"{docId}#p{parentIndex}_c{c}";
 
-                IngestionChunk<string> childOut = ChunkCopy.With(rawChild, rawChild.Content, document, parentChunk.Context);
-                AlignTableMetadata(childOut.Metadata, parentChunk.Metadata);
-                childOut.Metadata[ChunkMetadataKeys.ChunkRole] = ChunkMetadataKeys.ChildRole;
-                childOut.Metadata[ChunkMetadataKeys.ChunkId] = childId;
-                childOut.Metadata[ChunkMetadataKeys.ParentId] = parentId;
-                childOut.Metadata[ChunkMetadataKeys.ChildIndex] = c;
-                childOut.Metadata[ChunkMetadataKeys.ChildCount] = childChunks.Count;
-                childOut.Metadata[ChunkMetadataKeys.ParentTokenCount] = parentTokenCount;
+                    IngestionChunk<string> childOut = ChunkCopy.With(rawChild, rawChild.Content, document, parentChunk.Context);
+                    AlignTableMetadata(childOut.Metadata, parentChunk.Metadata);
+                    childOut.Metadata[ChunkMetadataKeys.ChunkRole] = ChunkMetadataKeys.ChildRole;
+                    childOut.Metadata[ChunkMetadataKeys.ChunkId] = childId;
+                    childOut.Metadata[ChunkMetadataKeys.ParentId] = parentId;
+                    childOut.Metadata[ChunkMetadataKeys.ChildIndex] = c;
+                    childOut.Metadata[ChunkMetadataKeys.ChildCount] = childChunks.Count;
+                    childOut.Metadata[ChunkMetadataKeys.ParentTokenCount] = parentTokenCount;
 
-                enrichedChildren.Add(childOut);
+                    enrichedChildren.Add(childOut);
+                }
+
+                switch (_emissionMode)
+                {
+                    case HierarchicalEmissionMode.Interleaved:
+                        yield return parentOut;
+                        foreach (IngestionChunk<string> child in enrichedChildren)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            yield return child;
+                        }
+                        break;
+
+                    case HierarchicalEmissionMode.ChildrenOnly:
+                        foreach (IngestionChunk<string> child in enrichedChildren)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            yield return child;
+                        }
+                        break;
+                }
             }
-
-            switch (_emissionMode)
+            else
             {
-                case HierarchicalEmissionMode.Interleaved:
-                    yield return parentOut;
-                    foreach (IngestionChunk<string> child in enrichedChildren)
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        yield return child;
-                    }
-                    break;
-
-                case HierarchicalEmissionMode.ChildrenOnly:
-                    foreach (IngestionChunk<string> child in enrichedChildren)
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        yield return child;
-                    }
-                    break;
-
-                case HierarchicalEmissionMode.ParentsOnly:
-                    yield return parentOut;
-                    break;
+                yield return parentOut;
             }
 
             parentIndex++;
@@ -174,20 +177,15 @@ public sealed class HierarchicalTokenChunker : IngestionChunker<string>
         child[ChunkMetadataKeys.IsTableContinuation] = parent[ChunkMetadataKeys.IsTableContinuation] is true || childContinues;
         child[ChunkMetadataKeys.TablePartIndex] = parent[ChunkMetadataKeys.TablePartIndex];
 
-        string parentRange = (string)parent[ChunkMetadataKeys.TableRowRange];
-        (int parentFirst, _) = ParseRange(parentRange);
-        (int childFirst, int childLast) = child.TryGetValue(ChunkMetadataKeys.TableRowRange, out object? childRange)
-            ? ParseRange((string)childRange)
+        string parentRange = parent.TryGetValue(ChunkMetadataKeys.TableRowRange, out object? pr) && pr is string prs
+            ? prs
+            : TableRowRange.None;
+        (int parentFirst, _) = TableRowRange.Parse(parentRange);
+        (int childFirst, int childLast) = child.TryGetValue(ChunkMetadataKeys.TableRowRange, out object? childRange) && childRange is string crs
+            ? TableRowRange.Parse(crs)
             : (0, 0);
         child[ChunkMetadataKeys.TableRowRange] = parentFirst > 0 && childFirst > 0
-            ? $"{parentFirst + childFirst - 1}-{parentFirst + childLast - 1}"
+            ? TableRowRange.Format(parentFirst + childFirst - 1, parentFirst + childLast - 1)
             : parentRange;
-    }
-
-    private static (int First, int Last) ParseRange(string range)
-    {
-        int dash = range.IndexOf('-', StringComparison.Ordinal);
-        return (int.Parse(range.AsSpan(0, dash), System.Globalization.CultureInfo.InvariantCulture),
-            int.Parse(range.AsSpan(dash + 1), System.Globalization.CultureInfo.InvariantCulture));
     }
 }

@@ -67,6 +67,38 @@ public sealed class ProtectedStructureTests
     }
 
     [Fact]
+    public async Task DocumentTableWithOversizedRowIsSlicedWithHeaderAndRepeatedHeaders()
+    {
+        string oversizedCell = string.Join(" ", Enumerable.Repeat("oversized", 30));
+        var cells = new IngestionDocumentElement?[4, 1];
+        cells[0, 0] = new IngestionDocumentParagraph("A");
+        cells[1, 0] = new IngestionDocumentParagraph("short");
+        cells[2, 0] = new IngestionDocumentParagraph(oversizedCell);
+        cells[3, 0] = new IngestionDocumentParagraph("after");
+
+        string html = $"<table><tr><th>A</th></tr><tr><td>short</td></tr><tr><td>{oversizedCell}</td></tr><tr><td>after</td></tr></table>";
+        var table = new IngestionDocumentTable(html, cells);
+
+        const string Header = "| A |\n| --- |\n";
+        int limit = Count(Header + "| short |");
+        var chunks = await ReadAsync(NewChunker(limit), Document(table));
+
+        chunks.Count.Should().BeGreaterThan(2);
+        AssertBudget(chunks, limit);
+
+        chunks.Count(c => c.Content.Contains("| short |", StringComparison.Ordinal)).Should().Be(1);
+        chunks.Count(c => c.Content.Contains("| after |", StringComparison.Ordinal)).Should().Be(1);
+        chunks.Should().AllSatisfy(c => c.Metadata[ChunkMetadataKeys.IsTablePart].Should().Be(true));
+
+        chunks[0].Content.Should().Be(Header + "| short |");
+        chunks[1].Content.Should().StartWith(Header).And.Contain("oversized");
+        chunks[^1].Content.Should().Be(Header + "| after |");
+
+        string allContent = string.Concat(chunks.Select(c => c.Content));
+        allContent.Count(ch => ch == 'o').Should().Be(("| short |" + "| " + oversizedCell + " |").Count(ch => ch == 'o'));
+    }
+
+    [Fact]
     public async Task HeaderOnlyOversizedTableAlsoUsesLosslessFallback()
     {
         const string Markdown = "| one two three |\n| --- |";

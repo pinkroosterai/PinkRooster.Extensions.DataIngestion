@@ -12,7 +12,7 @@ namespace PinkRooster.Extensions.DataIngestion.CodeAnalysis;
 /// <summary>Chunks raw C# and fenced C# by syntax without compiling the source.</summary>
 public sealed class RoslynCodeChunker : IngestionChunker<string>
 {
-    private static readonly CSharpParseOptions ParseOptions = new(LanguageVersion.CSharp14, DocumentationMode.Parse);
+    private static readonly CSharpParseOptions _parseOptions = new(LanguageVersion.CSharp14, DocumentationMode.Parse);
     private readonly Tokenizer _tokenizer;
     private readonly int _maxTokens;
     private readonly int _overlap;
@@ -48,7 +48,7 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
         {
             foreach (string source in CSharpSourceBlocks.Read(section, cancellationToken))
             {
-                CompilationUnitSyntax root = CSharpSyntaxTree.ParseText(source, ParseOptions, cancellationToken: cancellationToken)
+                CompilationUnitSyntax root = CSharpSyntaxTree.ParseText(source, _parseOptions, cancellationToken: cancellationToken)
                     .GetCompilationUnitRoot(cancellationToken);
                 DirectiveContext directives = new DirectiveContext(root, source, cancellationToken);
                 CodeScope scope = new CodeScope(null, null, null).WithUsings(root.Usings, _includeUsings);

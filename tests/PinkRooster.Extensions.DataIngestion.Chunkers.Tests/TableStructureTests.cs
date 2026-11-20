@@ -20,7 +20,6 @@ public sealed class TableStructureTests
         List<MarkdownTable> tables = [.. MarkdownTable.Find(Markdown, TestContext.Current.CancellationToken)];
 
         tables.Should().HaveCount(1);
-        tables[0].ColumnCount.Should().Be(2);
         tables[0].RowCount.Should().Be(2);
         tables[0].Start.Should().Be(0);
         tables[0].End.Should().Be(Markdown.Length);

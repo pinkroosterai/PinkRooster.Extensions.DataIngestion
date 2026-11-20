@@ -11,9 +11,9 @@ public sealed class ArgumentContractTests
     public void RecursiveChunkerReportsInvalidOptionsAgainstTheOptionsParameter()
     {
         Action reserved = () => _ = new RecursiveTokenChunker(new RecursiveChunkerOptions(TokenizerFixture.Instance)
-            { MaxTokensPerChunk = 10, OverlapTokens = 0, ReservedHeaderTokens = 10 });
+        { MaxTokensPerChunk = 10, OverlapTokens = 0, ReservedHeaderTokens = 10 });
         Action separator = () => _ = new RecursiveTokenChunker(new RecursiveChunkerOptions(TokenizerFixture.Instance)
-            { MaxTokensPerChunk = 10, OverlapTokens = 0, KeepSeparator = (SeparatorPlacement)42 });
+        { MaxTokensPerChunk = 10, OverlapTokens = 0, KeepSeparator = (SeparatorPlacement)42 });
 
         reserved.Should().Throw<ArgumentOutOfRangeException>().Which.ParamName.Should().Be("options");
         separator.Should().Throw<ArgumentOutOfRangeException>().Which.ParamName.Should().Be("options");
@@ -23,7 +23,7 @@ public sealed class ArgumentContractTests
     public void TableChunkerReportsInvalidOptionsAgainstTheOptionsParameter()
     {
         Action reserved = () => _ = new MarkdownTableChunker(new TableChunkerOptions(TokenizerFixture.Instance)
-            { MaxTokensPerChunk = 10, ReservedHeaderTokens = 10 });
+        { MaxTokensPerChunk = 10, ReservedHeaderTokens = 10 });
 
         reserved.Should().Throw<ArgumentOutOfRangeException>().Which.ParamName.Should().Be("options");
     }

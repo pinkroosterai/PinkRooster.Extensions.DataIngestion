@@ -3,11 +3,9 @@ namespace PinkRooster.Extensions.DataIngestion.Chunkers;
 /// <summary>Represents the byte/character offsets and structure of a Markdown pipe table.</summary>
 internal readonly record struct MarkdownTable(
     int Start,
-    int HeaderStart,
     int DelimiterEnd,
     int RowsStart,
     int End,
-    int ColumnCount,
     int RowCount)
 {
     /// <summary>Scans text for GFM-compliant pipe tables outside of code fences.</summary>
@@ -94,7 +92,7 @@ internal readonly record struct MarkdownTable(
             }
 
             int tableEnd = current;
-            yield return new MarkdownTable(start, start, line2End, rowsStart, tableEnd, colCount, rowCount);
+            yield return new MarkdownTable(start, line2End, rowsStart, tableEnd, rowCount);
 
             start = tableEnd;
         }

@@ -2,14 +2,6 @@ using Microsoft.Extensions.DataIngestion;
 
 namespace PinkRooster.Extensions.DataIngestion.Chunkers;
 
-/// <summary>Internal representation of a chunk produced from a Markdown table.</summary>
-internal readonly record struct TableChunk(
-    string Content,
-    int PartIndex,
-    bool IsContinuation,
-    int StartRow,
-    int EndRow);
-
 /// <summary>Splits Markdown tables by row windows while re-injecting headers and delimiter rows.</summary>
 internal sealed class TableSplitter(TokenBudget budget)
 {
@@ -27,7 +19,7 @@ internal sealed class TableSplitter(TokenBudget budget)
             return chunks;
         }
 
-        string headerText = markdown[table.HeaderStart..table.DelimiterEnd];
+        string headerText = markdown[table.Start..table.DelimiterEnd];
         if (!headerText.EndsWith('\n'))
         {
             headerText += "\n";
@@ -45,7 +37,8 @@ internal sealed class TableSplitter(TokenBudget budget)
                 int remaining = table.End - start;
                 int sliceLen = TextBoundaries.ForcedPrefix(budget, markdown.AsSpan(start, remaining), budget.Limit, cancellationToken);
 
-                chunks.Add(new TableChunk(markdown[start..(start + sliceLen)], part++, part > 1, 0, 0));
+                chunks.Add(new TableChunk(markdown[start..(start + sliceLen)], part, part > 0, 0, 0));
+                part++;
                 start += sliceLen;
             }
 
@@ -88,8 +81,7 @@ internal sealed class TableSplitter(TokenBudget budget)
                 // A single row exceeds the budget even beside the header: isolate and slice it.
                 buffer.Length = headerLength;
                 Range row = rows[first];
-                SliceOversizedRow(chunks, headerText, headerTokens, markdown, row.Start.Value,
-                    row.End.Value - row.Start.Value, ref partIndex, first + 1, cancellationToken);
+                SliceOversizedRow(chunks, headerText, headerTokens, markdown, row, ref partIndex, first + 1, cancellationToken);
                 first++;
                 continue;
             }
@@ -101,6 +93,107 @@ internal sealed class TableSplitter(TokenBudget budget)
         }
 
         return chunks;
+    }
+
+    internal IReadOnlyList<TableChunk>? Split(IngestionDocumentElement?[,] cells, CancellationToken cancellationToken)
+    {
+        int rows = cells.GetLength(0);
+        int columns = cells.GetLength(1);
+        if (rows < 2 || columns == 0 || !HasAnyCell(cells))
+        {
+            return null;
+        }
+
+        string markdown = FormatTable(cells, cancellationToken);
+        using IEnumerator<MarkdownTable> enumerator = MarkdownTable.Find(markdown, cancellationToken).GetEnumerator();
+        if (!enumerator.MoveNext())
+        {
+            return null;
+        }
+
+        return Split(markdown, enumerator.Current, cancellationToken);
+    }
+
+    private static bool HasAnyCell(IngestionDocumentElement?[,] cells)
+    {
+        foreach (IngestionDocumentElement? cell in cells)
+        {
+            if (cell is not null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string FormatTable(IngestionDocumentElement?[,] cells, CancellationToken cancellationToken)
+    {
+        using PooledText buffer = new();
+        AppendRow(buffer, cells, 0, cancellationToken);
+        buffer.Append("\n|");
+        int columns = cells.GetLength(1);
+        for (int i = 0; i < columns; i++)
+        {
+            buffer.Append(" --- |");
+        }
+
+        int rows = cells.GetLength(0);
+        for (int r = 1; r < rows; r++)
+        {
+            buffer.Append("\n");
+            AppendRow(buffer, cells, r, cancellationToken);
+        }
+
+        return buffer.ToString();
+    }
+
+    private static void AppendRow(PooledText buffer, IngestionDocumentElement?[,] cells, int row,
+        CancellationToken cancellationToken)
+    {
+        buffer.Append("|");
+        for (int column = 0; column < cells.GetLength(1); column++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            buffer.Append(" ");
+            if (cells[row, column] is { } cell)
+            {
+                AppendCell(buffer, cell.GetMarkdown());
+            }
+
+            buffer.Append(" |");
+        }
+    }
+
+    private static void AppendCell(PooledText buffer, ReadOnlySpan<char> cell)
+    {
+        int start = 0;
+        int escapes = 0;
+        for (int i = 0; i < cell.Length; i++)
+        {
+            char ch = cell[i];
+            if (ch == '|' && escapes % 2 == 0)
+            {
+                buffer.Append(cell[start..i]);
+                buffer.Append("\\");
+                start = i;
+            }
+            else if (ch is '\r' or '\n')
+            {
+                buffer.Append(cell[start..i]);
+                buffer.Append("<br />");
+                if (ch == '\r' && i + 1 < cell.Length && cell[i + 1] == '\n')
+                {
+                    i++;
+                }
+
+                start = i + 1;
+            }
+
+            escapes = ch == '\\' ? escapes + 1 : 0;
+        }
+
+        buffer.Append(cell[start..]);
     }
 
     /// <summary>Resets the buffer to the header and appends <paramref name="count"/> rows, each ending a line.</summary>
@@ -118,7 +211,7 @@ internal sealed class TableSplitter(TokenBudget budget)
         }
     }
 
-    private static string WithoutFinalLineBreak(ReadOnlySpan<char> text) => text.TrimEnd("\r\n").ToString();
+    internal static string WithoutFinalLineBreak(ReadOnlySpan<char> text) => text.TrimEnd("\r\n").ToString();
 
     /// <summary>Creates the chunk for one table part, with the table metadata every chunker emits.</summary>
     internal static IngestionChunk<string> CreateChunk(
@@ -131,7 +224,7 @@ internal sealed class TableSplitter(TokenBudget budget)
         ingestionChunk.Metadata[ChunkMetadataKeys.IsTablePart] = true;
         ingestionChunk.Metadata[ChunkMetadataKeys.IsTableContinuation] = chunk.IsContinuation;
         ingestionChunk.Metadata[ChunkMetadataKeys.TablePartIndex] = chunk.PartIndex;
-        ingestionChunk.Metadata[ChunkMetadataKeys.TableRowRange] = chunk.StartRow > 0 ? $"{chunk.StartRow}-{chunk.EndRow}" : "0-0";
+        ingestionChunk.Metadata[ChunkMetadataKeys.TableRowRange] = TableRowRange.Format(chunk.StartRow, chunk.EndRow);
         return ingestionChunk;
     }
 
@@ -140,37 +233,36 @@ internal sealed class TableSplitter(TokenBudget budget)
         string headerText,
         int headerTokens,
         string markdown,
-        int rowStart,
-        int rowLength,
+        Range row,
         ref int partIndex,
         int rowNumber,
         CancellationToken cancellationToken)
     {
         int availableForPrefix = budget.Limit - headerTokens;
-        int currentStart = rowStart;
-        int remainingLength = rowLength;
+        int currentStart = row.Start.Value;
+        int rowEnd = row.End.Value;
 
         if (availableForPrefix > 0)
         {
-            int prefixLen = TextBoundaries.FindPrefix(budget, markdown.AsSpan(currentStart, remainingLength), availableForPrefix, cancellationToken);
+            int remaining = rowEnd - currentStart;
+            int prefixLen = TextBoundaries.FindPrefix(budget, markdown.AsSpan(currentStart, remaining), availableForPrefix, cancellationToken);
             if (prefixLen > 0)
             {
                 chunks.Add(new TableChunk(string.Concat(headerText, markdown.AsSpan(currentStart, prefixLen)), partIndex, partIndex > 0, rowNumber, rowNumber));
                 partIndex++;
                 currentStart += prefixLen;
-                remainingLength -= prefixLen;
             }
         }
 
-        while (remainingLength > 0)
+        while (currentStart < rowEnd)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            int len = TextBoundaries.ForcedPrefix(budget, markdown.AsSpan(currentStart, remainingLength), budget.Limit, cancellationToken);
+            int remaining = rowEnd - currentStart;
+            int sliceLen = TextBoundaries.ForcedPrefix(budget, markdown.AsSpan(currentStart, remaining), budget.Limit, cancellationToken);
 
-            chunks.Add(new TableChunk(markdown[currentStart..(currentStart + len)], partIndex, partIndex > 0, rowNumber, rowNumber));
+            chunks.Add(new TableChunk(markdown[currentStart..(currentStart + sliceLen)], partIndex, partIndex > 0, rowNumber, rowNumber));
             partIndex++;
-            currentStart += len;
-            remainingLength -= len;
+            currentStart += sliceLen;
         }
     }
 }

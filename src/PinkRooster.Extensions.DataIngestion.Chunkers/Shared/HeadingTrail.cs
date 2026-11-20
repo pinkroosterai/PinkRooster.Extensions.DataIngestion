@@ -43,10 +43,13 @@ internal sealed class HeadingTrail
             _entries.RemoveAt(_entries.Count - 1);
         }
 
-        string text = Strip(markdown ?? string.Empty);
-        if (text.Length > 0)
+        if (markdown is not null)
         {
-            _entries.Add(new Entry(depth, markdown!.Trim(), text));
+            string text = Strip(markdown);
+            if (text.Length > 0)
+            {
+                _entries.Add(new Entry(depth, markdown.Trim(), text));
+            }
         }
     }
 

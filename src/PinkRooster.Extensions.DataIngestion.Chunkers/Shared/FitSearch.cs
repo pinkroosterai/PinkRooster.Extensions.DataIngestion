@@ -14,14 +14,18 @@ internal static class FitSearch
     internal static int Count(int available, int estimate, Func<int, bool> fits)
     {
         int count = Math.Clamp(estimate, 0, available);
+        int initial = count;
         while (count > 0 && !fits(count))
         {
             count--;
         }
 
-        while (count < available && fits(count + 1))
+        if (count == initial)
         {
-            count++;
+            while (count < available && fits(count + 1))
+            {
+                count++;
+            }
         }
 
         return count;

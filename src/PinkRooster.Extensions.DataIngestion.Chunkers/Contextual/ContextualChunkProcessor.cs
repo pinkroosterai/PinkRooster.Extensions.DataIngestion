@@ -16,7 +16,7 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
     /// </summary>
     public const string ActivitySourceName = "PinkRooster.Extensions.DataIngestion.Chunkers";
     private const string Separator = "\n\n";
-    private static readonly ActivitySource Activities = new(ActivitySourceName);
+    private static readonly ActivitySource _activities = new(ActivitySourceName);
     private readonly IChatClient _chatClient;
     private readonly ChatOptions? _chatOptions;
     private readonly ILogger? _logger;
@@ -202,7 +202,7 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
         string context, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        using Activity? activity = Activities.StartActivity("contextual_enrichment");
+        using Activity? activity = _activities.StartActivity("contextual_enrichment");
         List<ChatMessage> messages =
         [
             new(ChatRole.System, "Write a short contextual header that situates the target chunk in the source document. " +

@@ -9,12 +9,12 @@ internal sealed class DocumentContextCache(TokenBudget budget, int overlap)
 
     internal DocumentContext Get(IngestionDocument document, CancellationToken cancellationToken)
     {
-        if (!ReferenceEquals(_document, document))
+        if (!ReferenceEquals(_document, document) || _context is null)
         {
             _context = new DocumentContext(document, budget, overlap, cancellationToken);
             _document = document;
         }
 
-        return _context!;
+        return _context;
     }
 }

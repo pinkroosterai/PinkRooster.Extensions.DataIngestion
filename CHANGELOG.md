@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [1.0.0-preview.2] - 2026-11-20
+
+### Changed
+- Consolidated table row-window chunking into `TableSplitter`, enabling oversized row slicing with repeated headers for document tables.
+- Decoupled CRLF-aware line splitting and abbreviation protection in `ProseSplitter` so custom separator lists retain line-ending and abbreviation integrity.
+- Centralized table row range formatting and parsing in `TableRowRange`.
+- Extracted `TableChunk` into its own file.
+- Standardized private static field names and extracted named heuristic constants.
+
 ## [1.0.0-preview.1] - 2026-11-19
 
 - Initial release of `PinkRooster.Extensions.DataIngestion.Chunkers` and `PinkRooster.Extensions.DataIngestion.CodeAnalysis`.

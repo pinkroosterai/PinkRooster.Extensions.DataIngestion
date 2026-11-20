@@ -5,6 +5,12 @@ namespace PinkRooster.Extensions.DataIngestion.Chunkers;
 
 internal sealed class DocumentContext
 {
+    /// <summary>Minimum character length of a normalized line used as a content anchor.</summary>
+    private const int MinimumLineAnchorLength = 16;
+
+    /// <summary>Bitmask to throttle cancellation checks to once every 1,024 iterations.</summary>
+    private const int CancellationCheckIntervalMask = 1023;
+
     private readonly string _text;
     private readonly string _normalized;
     private readonly int[] _sourceOffsets;
@@ -133,7 +139,7 @@ internal sealed class DocumentContext
         {
             cancellationToken.ThrowIfCancellationRequested();
             string anchor = Normalize(line, cancellationToken);
-            if (anchor.Length >= 16 && Search(anchor) is int position)
+            if (anchor.Length >= MinimumLineAnchorLength && Search(anchor) is int position)
             {
                 return position;
             }
@@ -171,6 +177,8 @@ internal sealed class DocumentContext
 
     private static int FindWindowLength(ReadOnlySpan<char> text, TokenBudget budget, CancellationToken cancellationToken)
     {
+        // Retain the backward loop: unlike TextBoundaries.FindPrefix which breaks on and rejects whitespace-only prefixes,
+        // this loop accepts whitespace scalar boundaries so windows advance across whitespace runs without throwing NoFit.
         int boundary = Math.Clamp(budget.PrefixIndex(text, budget.Limit), 0, text.Length);
         for (int end = boundary; end > 0; end--)
         {
@@ -231,7 +239,7 @@ internal sealed class DocumentContext
                 trail.Open(header.Level, markdown);
             }
 
-            if (trail.Breadcrumb is { } breadcrumb)
+            if (trail.Breadcrumb is { } breadcrumb && trail.Leaf is { } leaf)
             {
                 // Chunkers in this package report the stripped breadcrumb; other chunkers may report the headings'
                 // source Markdown, joined either way, or only the innermost heading.
@@ -240,7 +248,7 @@ internal sealed class DocumentContext
                     Normalize(breadcrumb, cancellationToken),
                     Normalize(string.Join(HeadingTrail.Separator, raw), cancellationToken),
                     Normalize(string.Join(" ", raw), cancellationToken),
-                    Normalize(trail.Leaf!, cancellationToken),
+                    Normalize(leaf, cancellationToken),
                     Normalize(raw[^1], cancellationToken)));
             }
         }
@@ -252,7 +260,7 @@ internal sealed class DocumentContext
         int whitespace = -1;
         for (int i = 0; i < text.Length; i++)
         {
-            if ((i & 1023) == 0)
+            if ((i & CancellationCheckIntervalMask) == 0)
             {
                 cancellationToken.ThrowIfCancellationRequested();
             }

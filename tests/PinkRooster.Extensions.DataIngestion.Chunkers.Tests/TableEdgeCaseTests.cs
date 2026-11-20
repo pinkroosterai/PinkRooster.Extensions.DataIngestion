@@ -163,7 +163,7 @@ public sealed class TableEdgeCaseTests
     }
 
     [Fact]
-    public async Task CellsWithARowTooLargeForAnyWindowFallBackToLosslessSlices()
+    public async Task CellsWithARowTooLargeForAnyWindowAreSlicedWithRepeatedHeaders()
     {
         string longNote = string.Join(" ", Enumerable.Repeat("oversized", 40));
         var table = HtmlTable(3, i => i == 2 ? longNote : $"note {i}");
@@ -171,9 +171,14 @@ public sealed class TableEdgeCaseTests
 
         var chunks = await ReadAsync(NewChunker(Limit), Document(table));
 
-        string.Concat(chunks.Select(c => c.Content)).Should().Be(table.GetMarkdown());
+        chunks.Count.Should().BeGreaterThan(3);
         AssertBudget(chunks, Limit);
-        chunks.Select(c => c.Metadata[ChunkMetadataKeys.TableRowRange]).Should().AllBeEquivalentTo("0-0");
+        chunks[0].Content.Should().StartWith("| Id | Note |\n| --- | --- |").And.Contain("note 1");
+        chunks[1].Content.Should().StartWith("| Id | Note |\n| --- | --- |").And.Contain("oversized");
+        chunks[^1].Content.Should().StartWith("| Id | Note |\n| --- | --- |").And.Contain("note 3");
+        string withoutHeaders = string.Concat(chunks.Select(c => c.Content.Replace("| Id | Note |\n| --- | --- |", "", StringComparison.Ordinal)));
+        withoutHeaders.Count(ch => ch == 'o').Should().Be(("| 1 | note 1 |" + $"| 2 | {longNote} |" + "| 3 | note 3 |").Count(ch => ch == 'o'));
+        chunks.Select(c => (string)c.Metadata[ChunkMetadataKeys.TableRowRange]).Should().Contain(["1-1", "2-2", "3-3"]);
     }
 
     [Fact]

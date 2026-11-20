@@ -1,7 +1,7 @@
 namespace PinkRooster.Extensions.DataIngestion.Chunkers;
 
 internal sealed class ProseSplitter(
-    TokenBudget budget, string[] separators, SeparatorPlacement placement, bool useDefaults)
+    TokenBudget budget, string[] separators, SeparatorPlacement placement)
 {
     internal IEnumerable<Range> Split(string text, int start, int end, string element, CancellationToken cancellationToken) =>
         Split(text, start, end, 0, element, cancellationToken);
@@ -94,9 +94,9 @@ internal sealed class ProseSplitter(
         }
     }
 
-    private (int Index, int Length) FindSeparator(string text, int start, int search, int end, string separator)
+    private static (int Index, int Length) FindSeparator(string text, int start, int search, int end, string separator)
     {
-        if (useDefaults && separator is "\n" or "\n\n")
+        if (separator is "\n" or "\n\n")
         {
             return FindLineBoundary(text, start, search, end, separator.Length == 2);
         }
@@ -110,7 +110,7 @@ internal sealed class ProseSplitter(
             }
 
             int index = search + offset;
-            if (!useDefaults || separator != ". " || !IsAbbreviation(text.AsSpan(start, index - start + 1)))
+            if (separator != ". " || !IsAbbreviation(text.AsSpan(start, index - start + 1)))
             {
                 if (TextBoundaries.IsScalarBoundary(text, index) &&
                     TextBoundaries.IsScalarBoundary(text, index + separator.Length))
