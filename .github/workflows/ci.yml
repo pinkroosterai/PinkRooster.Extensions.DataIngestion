@@ -40,7 +40,7 @@ jobs:
           --coverage-output-format cobertura --coverage-output codeanalysis.cobertura.xml
       - name: Report CodeAnalysis line coverage
         run: python3 tests/report-coverage.py artifacts/coverage-codeanalysis codeanalysis.cobertura.xml
-      - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: core-coverage
