@@ -31,6 +31,39 @@ public sealed class DocumentContextTests
     }
 
     [Fact]
+    public void AContextNamingOnlyTheInnermostHeadingStillSelectsItsSection()
+    {
+        // The anchor appears in both sections; only the heading tells them apart.
+        var document = RecursiveTokenChunkerTests.Document(
+            Header("# Parent"), Paragraph("shared marker in parent."), Paragraph(new string('x', 160)),
+            new IngestionDocumentHeader("## Child") { Level = 2 }, Paragraph("shared marker in child."),
+            Paragraph(new string('y', 160)));
+        var context = new DocumentContext(document, new(TokenizerFixture.Instance, 14), 0,
+            TestContext.Current.CancellationToken);
+
+        Find(context, new("shared marker", document)).Should().Contain("in parent");
+        Find(context, new("shared marker", document, "Child")).Should().NotContain("in parent").And.Contain("Child");
+        Find(context, new("shared marker", document, "## Child")).Should().NotContain("in parent").And.Contain("Child");
+    }
+
+    [Fact]
+    public void ChunksInTheSameWindowShareOneContextString()
+    {
+        const string Body = "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima " +
+            "mike november oscar papa quebec romeo sierra tango";
+        var original = Chunk(Body);
+        var context = new DocumentContext(original.Document, new(TokenizerFixture.Instance, 14), 0,
+            TestContext.Current.CancellationToken);
+
+        string first = Find(context, new("alpha", original.Document));
+        string again = Find(context, new("bravo", original.Document));
+        string later = Find(context, new("tango", original.Document));
+
+        again.Should().BeSameAs(first);
+        later.Should().NotBe(first);
+    }
+
+    [Fact]
     public void AtOrBelowBudgetUsesTheWholeSourceWithoutAnAnchor()
     {
         const string Body = "The full source.";
@@ -55,8 +88,8 @@ public sealed class DocumentContextTests
 
         Find(context, new("ZULU   EVIDENCE GOES HERE.", document, "# Repeated")).Should().Contain("zulu evidence");
         Find(context, new("exact duplicate marker", document, "# Repeated")).Should().NotContain("zulu evidence");
-        context.Find(new("unmatchable caller text", document), TestContext.Current.CancellationToken).HasValue
-            .Should().BeFalse();
+        context.Find(new("unmatchable caller text", document), TestContext.Current.CancellationToken)
+            .Should().BeNull();
     }
 
     [Fact]
@@ -126,7 +159,7 @@ public sealed class DocumentContextTests
     }
 
     private static string Find(DocumentContext context, IngestionChunk<string> chunk) =>
-        context.Find(chunk, TestContext.Current.CancellationToken)?.ToString()
+        context.Find(chunk, TestContext.Current.CancellationToken)
         ?? throw new InvalidOperationException("Expected a bucket.");
 
     private static IngestionDocumentHeader Header(string value) => new(value) { Level = 1 };

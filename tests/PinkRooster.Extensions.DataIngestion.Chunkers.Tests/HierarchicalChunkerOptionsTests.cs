@@ -6,7 +6,7 @@ namespace PinkRooster.Extensions.DataIngestion.Chunkers.Tests;
 
 public sealed class HierarchicalChunkerOptionsTests
 {
-    private static readonly Tokenizer Tokenizer = TiktokenTokenizer.CreateForModel("gpt-4o");
+    private static readonly Tokenizer Tokenizer = TokenizerFixture.Instance;
 
     [Fact]
     public void HierarchicalChunkerOptionsDefaultsAreCorrect()
@@ -19,8 +19,8 @@ public sealed class HierarchicalChunkerOptionsTests
         options.OverlapTokens.Should().Be(32);
         options.EmissionMode.Should().Be(HierarchicalEmissionMode.Interleaved);
 
-        Action validate = () => options.Validate();
-        validate.Should().NotThrow();
+        Action construct = () => _ = new HierarchicalTokenChunker(options);
+        construct.Should().NotThrow();
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public sealed class HierarchicalChunkerOptionsTests
     }
 
     [Fact]
-    public void HierarchicalChunkerOptionsValidateThrowsWhenParentLessThanChildBudget()
+    public void HierarchicalChunkerRejectsAParentBudgetBelowTheChildBudget()
     {
         var options = new HierarchicalChunkerOptions(Tokenizer)
         {
@@ -53,12 +53,12 @@ public sealed class HierarchicalChunkerOptionsTests
             MaxTokensPerChunk = 256,
         };
 
-        Action validate = () => options.Validate();
-        validate.Should().Throw<InvalidOperationException>();
+        Action construct = () => _ = new HierarchicalTokenChunker(options);
+        construct.Should().Throw<ArgumentOutOfRangeException>().Which.ParamName.Should().Be("options");
     }
 
     [Fact]
-    public void HierarchicalChunkerOptionsValidateThrowsWhenParentOverlapEqualsOrExceedsParentMaxTokens()
+    public void HierarchicalChunkerRejectsAParentOverlapNotBelowTheParentBudget()
     {
         var options = new HierarchicalChunkerOptions(Tokenizer)
         {
@@ -67,8 +67,29 @@ public sealed class HierarchicalChunkerOptionsTests
             MaxTokensPerChunk = 200,
         };
 
-        Action validate = () => options.Validate();
-        validate.Should().Throw<InvalidOperationException>();
+        Action construct = () => _ = new HierarchicalTokenChunker(options);
+        construct.Should().Throw<ArgumentOutOfRangeException>().Which.ParamName.Should().Be("options");
+    }
+
+    [Fact]
+    public void HierarchicalChunkerRejectsAChildOverlapNotBelowTheChildBudget()
+    {
+        // The upstream setter may already reject this combination; either way construction must fail.
+        Action construct = () => _ = new HierarchicalTokenChunker(new HierarchicalChunkerOptions(Tokenizer)
+        {
+            MaxTokensPerChunk = 64,
+            OverlapTokens = 64,
+        });
+        construct.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void HierarchicalChunkerRejectsAnUndefinedEmissionMode()
+    {
+        var options = new HierarchicalChunkerOptions(Tokenizer) { EmissionMode = (HierarchicalEmissionMode)42 };
+
+        Action construct = () => _ = new HierarchicalTokenChunker(options);
+        construct.Should().Throw<ArgumentOutOfRangeException>().Which.ParamName.Should().Be("options");
     }
 
     [Fact]

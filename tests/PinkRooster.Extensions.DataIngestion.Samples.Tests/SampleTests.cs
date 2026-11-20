@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using Microsoft.ML.Tokenizers;
 using PinkRooster.Extensions.DataIngestion.Samples;
+using PinkRooster.Extensions.DataIngestion.Chunkers;
 
 namespace PinkRooster.Extensions.DataIngestion.Samples.Tests;
 
@@ -66,7 +67,7 @@ public sealed class SampleTests
         }
 
         // 2. Enriched chunks contain contextual_header metadata
-        var enrichedChunks = result.Chunks.Where(c => c.Metadata.ContainsKey("contextual_header")).ToList();
+        var enrichedChunks = result.Chunks.Where(c => c.Metadata.ContainsKey(ChunkMetadataKeys.ContextualHeader)).ToList();
         enrichedChunks.Should().NotBeEmpty();
 
         // 3. Filtered chunks (tables) bypass enrichment
@@ -74,7 +75,7 @@ public sealed class SampleTests
         filteredTableChunks.Should().NotBeEmpty();
         foreach (var tableChunk in filteredTableChunks)
         {
-            tableChunk.Metadata.ContainsKey("contextual_header").Should().BeFalse();
+            tableChunk.Metadata.ContainsKey(ChunkMetadataKeys.ContextualHeader).Should().BeFalse();
         }
     }
 
@@ -98,9 +99,9 @@ public sealed class SampleTests
             c.Context != null && c.Context.Contains("DispatchCoordinator(IDispatchClock clock, int defaultLeadDays = 2)"));
 
         // 3. Conditional compilation symbols metadata
-        var conditionalChunks = result.Chunks.Where(c => c.Metadata.ContainsKey("conditional_symbols")).ToList();
+        var conditionalChunks = result.Chunks.Where(c => c.Metadata.ContainsKey(ChunkMetadataKeys.ConditionalSymbols)).ToList();
         conditionalChunks.Should().NotBeEmpty();
-        var symbols = (string[])conditionalChunks[0].Metadata["conditional_symbols"]!;
+        var symbols = (string[])conditionalChunks[0].Metadata[ChunkMetadataKeys.ConditionalSymbols]!;
         symbols.Should().Contain("DEBUG");
 
         // 4. Trivia and attributes preservation
@@ -121,17 +122,17 @@ public sealed class SampleTests
         result.ChunkCount.Should().BeGreaterThan(0);
         result.TotalTokens.Should().BeGreaterThan(0);
 
-        var parents = result.Chunks.Where(c => (string)c.Metadata["ChunkRole"] == "Parent").ToList();
-        var children = result.Chunks.Where(c => (string)c.Metadata["ChunkRole"] == "Child").ToList();
+        var parents = result.Chunks.Where(c => (string)c.Metadata[ChunkMetadataKeys.ChunkRole] == ChunkMetadataKeys.ParentRole).ToList();
+        var children = result.Chunks.Where(c => (string)c.Metadata[ChunkMetadataKeys.ChunkRole] == ChunkMetadataKeys.ChildRole).ToList();
 
         parents.Should().NotBeEmpty();
         children.Should().NotBeEmpty();
 
         foreach (var child in children)
         {
-            child.Metadata.Should().ContainKey("ParentId");
-            child.Metadata.Should().ContainKey("ChildIndex");
-            parents.Should().Contain(p => (string)p.Metadata["ChunkId"] == (string)child.Metadata["ParentId"]);
+            child.Metadata.Should().ContainKey(ChunkMetadataKeys.ParentId);
+            child.Metadata.Should().ContainKey(ChunkMetadataKeys.ChildIndex);
+            parents.Should().Contain(p => (string)p.Metadata[ChunkMetadataKeys.ChunkId] == (string)child.Metadata[ChunkMetadataKeys.ParentId]);
         }
     }
 

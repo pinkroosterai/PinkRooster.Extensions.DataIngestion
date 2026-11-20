@@ -22,12 +22,18 @@ public sealed class RecursiveChunkerOptions(Tokenizer tokenizer) : IngestionChun
     /// <summary>Gets or sets the tokens reserved for downstream content outside this chunker.</summary>
     public int ReservedHeaderTokens { get; set; }
 
-    /// <summary>Gets or sets whether to protect structured tables and closed fences.</summary>
+    /// <summary>
+    /// Gets or sets whether tables (document tables and pipe tables inside other elements) and closed code fences are
+    /// protected regions, kept whole when they fit and split structurally when they do not. The default is
+    /// <see langword="true"/>. When <see langword="false"/>, their text is split like any other prose.
+    /// </summary>
     public bool PreserveAtomicElements { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets whether to split oversized tables by rows and repeat table headers.
-    /// The default is <see langword="true"/>.
+    /// Gets or sets how a protected table that exceeds the budget is split: into row windows that each repeat the
+    /// header row (<see langword="true"/>, the default), or into consecutive slices of its text without repeated
+    /// headers (<see langword="false"/>). Has no effect when <see cref="PreserveAtomicElements"/> is
+    /// <see langword="false"/>.
     /// </summary>
     public bool RepeatTableHeaders { get; set; } = true;
 }

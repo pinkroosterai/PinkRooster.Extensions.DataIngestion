@@ -6,18 +6,61 @@ internal sealed class ProtectedChunker(TokenBudget budget)
 {
     private readonly TableSplitter _tableSplitter = new(budget);
 
-    internal IReadOnlyList<TableChunk> Table(string markdown, MarkdownTable table, CancellationToken cancellationToken) =>
-        _tableSplitter.Split(markdown, table, cancellationToken);
-
-    internal IReadOnlyList<string> Table(IngestionDocumentTable table, string markdown, CancellationToken cancellationToken)
+    /// <summary>
+    /// Splits a Markdown table found inside some Markdown. An oversized table becomes row windows that each repeat
+    /// the header when headers repeat, and lossless slices of its text otherwise.
+    /// </summary>
+    internal IReadOnlyList<TableChunk> Table(string markdown, MarkdownTable table, bool repeatHeaders,
+        CancellationToken cancellationToken)
     {
-        if (budget.Count(markdown) <= budget.Limit)
+        if (repeatHeaders || budget.Count(markdown.AsSpan(table.Start, table.End - table.Start)) <= budget.Limit)
         {
-            return [markdown];
+            return _tableSplitter.Split(markdown, table, cancellationToken);
         }
 
-        return TryTableRows(table.Cells, cancellationToken) ??
-            Lossless(markdown, 0, markdown.Length, nameof(IngestionDocumentTable), cancellationToken);
+        return AsTableChunks(Lossless(markdown, table.Start, table.End, "table", cancellationToken));
+    }
+
+    /// <summary>
+    /// Splits a document table. Its Markdown is split like any other Markdown table when it parses as one; the cells
+    /// are the fallback for Markdown that does not, and lossless slicing the last resort.
+    /// </summary>
+    internal IReadOnlyList<TableChunk> Table(IngestionDocumentTable table, string markdown, bool repeatHeaders,
+        CancellationToken cancellationToken)
+    {
+        foreach (MarkdownTable parsed in MarkdownTable.Find(markdown, cancellationToken))
+        {
+            if (markdown.AsSpan(0, parsed.Start).IsWhiteSpace() && markdown.AsSpan(parsed.End).IsWhiteSpace())
+            {
+                return Table(markdown, parsed, repeatHeaders, cancellationToken);
+            }
+
+            break;
+        }
+
+        int dataRows = Math.Max(table.Cells.GetLength(0) - 1, 0);
+        if (budget.Count(markdown) <= budget.Limit)
+        {
+            return [new TableChunk(markdown, 0, false, dataRows > 0 ? 1 : 0, dataRows)];
+        }
+
+        if (repeatHeaders && TryTableRows(table.Cells, cancellationToken) is { } rows)
+        {
+            return rows;
+        }
+
+        return AsTableChunks(Lossless(markdown, 0, markdown.Length, nameof(IngestionDocumentTable), cancellationToken));
+    }
+
+    private static TableChunk[] AsTableChunks(string[] parts)
+    {
+        TableChunk[] chunks = new TableChunk[parts.Length];
+        for (int i = 0; i < parts.Length; i++)
+        {
+            chunks[i] = new TableChunk(parts[i], i, i > 0, 0, 0);
+        }
+
+        return chunks;
     }
 
     internal IEnumerable<string> Fence(string markdown, MarkdownFence fence, CancellationToken cancellationToken)
@@ -65,24 +108,16 @@ internal sealed class ProtectedChunker(TokenBudget budget)
             buffer.Append(markdown.AsSpan(fence.BodyEnd, fence.End - fence.BodyEnd));
         }
 
+        int wrapperTokens = budget.Count(markdown.AsSpan(fence.Start, fence.BodyStart - fence.Start)) +
+            budget.Count(markdown.AsSpan(fence.BodyEnd, fence.End - fence.BodyEnd));
+        List<int> lineEnds = [];
+
         int PreferredEnd(int start)
         {
-            int lastLine = start;
-            while (lastLine < fence.BodyEnd)
+            int lines = FittingLineEnd(markdown, fence, start, wrapperTokens, lineEnds, Fits, cancellationToken);
+            if (lines > start)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                int end = MarkdownFence.EndOfLine(markdown, lastLine);
-                if (!Fits(start, end))
-                {
-                    break;
-                }
-
-                lastLine = end;
-            }
-
-            if (lastLine > start)
-            {
-                return lastLine;
+                return lines;
             }
 
             int lineEnd = MarkdownFence.EndOfLine(markdown, start);
@@ -120,11 +155,55 @@ internal sealed class ProtectedChunker(TokenBudget budget)
         }
     }
 
-    private List<string>? TryTableRows(IngestionDocumentElement?[,] cells, CancellationToken cancellationToken)
+    /// <summary>
+    /// Returns the end of the last whole line of a fence body that fits, starting at <paramref name="start"/>, or
+    /// <paramref name="start"/> when not even the first line fits.
+    /// </summary>
+    private int FittingLineEnd(string markdown, MarkdownFence fence, int start, int wrapperTokens, List<int> lineEnds,
+        Func<int, int, bool> fits, CancellationToken cancellationToken)
+    {
+        lineEnds.Clear();
+        int LineEnd(int count)
+        {
+            while (lineEnds.Count < count)
+            {
+                int from = lineEnds.Count == 0 ? start : lineEnds[^1];
+                if (from >= fence.BodyEnd)
+                {
+                    return -1;
+                }
+
+                lineEnds.Add(MarkdownFence.EndOfLine(markdown, from));
+            }
+
+            return lineEnds[count - 1];
+        }
+
+        int bodyBudget = budget.Limit - wrapperTokens;
+        int reach = bodyBudget > 0
+            ? start + budget.PrefixIndex(markdown.AsSpan(start, fence.BodyEnd - start), bodyBudget)
+            : start;
+        int estimate = 0;
+        while (LineEnd(estimate + 1) is int end && end >= 0 && end <= reach)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            estimate++;
+        }
+
+        int lines = FitSearch.Count(int.MaxValue - 1, estimate, count =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return LineEnd(count) is int end && end >= 0 && fits(start, end);
+        });
+
+        return lines > 0 ? LineEnd(lines) : start;
+    }
+
+    private List<TableChunk>? TryTableRows(IngestionDocumentElement?[,] cells, CancellationToken cancellationToken)
     {
         int rows = cells.GetLength(0);
         int columns = cells.GetLength(1);
-        if (rows < 2 || columns == 0)
+        if (rows < 2 || columns == 0 || !HasAnyCell(cells))
         {
             return null;
         }
@@ -138,36 +217,73 @@ internal sealed class ProtectedChunker(TokenBudget budget)
         }
 
         int headerLength = buffer.Length;
-        List<string> chunks = [];
-        for (int row = 1; row < rows; row++)
+        int headerTokens = budget.Count(buffer.Span);
+        int[] rowTokens = new int[rows];
+        using (PooledText row = new PooledText())
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            int beforeRow = buffer.Length;
-            buffer.Append("\n");
-            AppendRow(buffer, cells, row, cancellationToken);
-            if (budget.Count(buffer.Span) <= budget.Limit)
+            for (int r = 1; r < rows; r++)
             {
-                continue;
-            }
-
-            if (beforeRow == headerLength)
-            {
-                return null;
-            }
-
-            buffer.Length = beforeRow;
-            chunks.Add(buffer.ToString());
-            buffer.Length = headerLength;
-            buffer.Append("\n");
-            AppendRow(buffer, cells, row, cancellationToken);
-            if (budget.Count(buffer.Span) > budget.Limit)
-            {
-                return null;
+                cancellationToken.ThrowIfCancellationRequested();
+                row.Length = 0;
+                row.Append("\n");
+                AppendRow(row, cells, r, cancellationToken);
+                rowTokens[r] = budget.Count(row.Span);
             }
         }
 
-        chunks.Add(buffer.ToString());
+        List<TableChunk> chunks = [];
+        int firstRow = 1;
+        while (firstRow < rows)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            int estimate = 0;
+            for (int total = headerTokens; firstRow + estimate < rows && total + rowTokens[firstRow + estimate] <= budget.Limit; estimate++)
+            {
+                total += rowTokens[firstRow + estimate];
+            }
+
+            int window = firstRow;
+            int fit = FitSearch.Count(rows - firstRow, estimate, count =>
+            {
+                FillCellRows(buffer, headerLength, cells, window, count, cancellationToken);
+                return budget.Count(buffer.Span) <= budget.Limit;
+            });
+
+            if (fit == 0)
+            {
+                return null;
+            }
+
+            FillCellRows(buffer, headerLength, cells, firstRow, fit, cancellationToken);
+            chunks.Add(new TableChunk(buffer.ToString(), chunks.Count, chunks.Count > 0, firstRow, firstRow + fit - 1));
+            firstRow += fit;
+        }
+
         return chunks;
+    }
+
+    private static void FillCellRows(PooledText buffer, int headerLength, IngestionDocumentElement?[,] cells, int first,
+        int count, CancellationToken cancellationToken)
+    {
+        buffer.Length = headerLength;
+        for (int row = first; row < first + count; row++)
+        {
+            buffer.Append("\n");
+            AppendRow(buffer, cells, row, cancellationToken);
+        }
+    }
+
+    private static bool HasAnyCell(IngestionDocumentElement?[,] cells)
+    {
+        foreach (IngestionDocumentElement? cell in cells)
+        {
+            if (cell is not null)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void AppendRow(PooledText buffer, IngestionDocumentElement?[,] cells, int row,
@@ -218,7 +334,7 @@ internal sealed class ProtectedChunker(TokenBudget budget)
         buffer.Append(cell[start..]);
     }
 
-    private IReadOnlyList<string> Lossless(string text, int start, int end, string element, CancellationToken cancellationToken)
+    private string[] Lossless(string text, int start, int end, string element, CancellationToken cancellationToken)
     {
         ReadOnlySpan<char> span = text.AsSpan(start, end - start);
         int trimmedLength = span.TrimEnd().Length;
@@ -246,7 +362,7 @@ internal sealed class ProtectedChunker(TokenBudget budget)
         return ranges.Select(range => text[range]).ToArray();
     }
 
-    private List<Range>? Partition(string text, int start, int end, Func<int, int> preferredEnd,
+    internal List<Range>? Partition(string text, int start, int end, Func<int, int> preferredEnd,
         Func<int, int, bool> fits, CancellationToken cancellationToken)
     {
         List<Range> ranges = [];

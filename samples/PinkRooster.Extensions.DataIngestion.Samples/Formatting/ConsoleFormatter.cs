@@ -3,6 +3,7 @@ using Microsoft.Extensions.DataIngestion;
 using PinkRooster.Extensions.DataIngestion.Samples.Scenarios;
 using Spectre.Console;
 using Spectre.Console.Rendering;
+using PinkRooster.Extensions.DataIngestion.Chunkers;
 
 namespace PinkRooster.Extensions.DataIngestion.Samples.Formatting;
 
@@ -97,7 +98,7 @@ public static partial class ConsoleFormatter
         }
 
         // 2b. Situational Context Callout (Anthropic Contextual Retrieval)
-        if (chunk.HasMetadata && chunk.Metadata.TryGetValue("contextual_header", out var headerObj) && headerObj is string headerText && !string.IsNullOrWhiteSpace(headerText))
+        if (chunk.HasMetadata && chunk.Metadata.TryGetValue(ChunkMetadataKeys.ContextualHeader, out var headerObj) && headerObj is string headerText && !string.IsNullOrWhiteSpace(headerText))
         {
             var calloutGrid = new Grid();
             calloutGrid.AddColumn();
@@ -116,11 +117,11 @@ public static partial class ConsoleFormatter
         }
 
         // 2c. Table Continuation & Metadata Callout
-        if (chunk.HasMetadata && chunk.Metadata.TryGetValue("IsTablePart", out var isTable) && isTable is true)
+        if (chunk.HasMetadata && chunk.Metadata.TryGetValue(ChunkMetadataKeys.IsTablePart, out var isTable) && isTable is true)
         {
-            var isContinuation = chunk.Metadata.TryGetValue("IsTableContinuation", out var isCont) && isCont is true;
-            var partIndex = chunk.Metadata.TryGetValue("TablePartIndex", out var part) ? part : 0;
-            var range = chunk.Metadata.TryGetValue("TableRowRange", out var r) ? r : "all";
+            var isContinuation = chunk.Metadata.TryGetValue(ChunkMetadataKeys.IsTableContinuation, out var isCont) && isCont is true;
+            var partIndex = chunk.Metadata.TryGetValue(ChunkMetadataKeys.TablePartIndex, out var part) ? part : 0;
+            var range = chunk.Metadata.TryGetValue(ChunkMetadataKeys.TableRowRange, out var r) ? r : "all";
             string tableLabel = isContinuation
                 ? $"[bold orange3]📊 Table Part #{partIndex} (Continuation • Rows: {range})[/]"
                 : $"[bold springgreen3]📊 Table Part #{partIndex} (Initial • Rows: {range})[/]";
@@ -129,20 +130,20 @@ public static partial class ConsoleFormatter
         }
 
         // 2d. Hierarchical Parent-Child Callout
-        if (chunk.HasMetadata && chunk.Metadata.TryGetValue("ChunkRole", out var roleObj) && roleObj is string role)
+        if (chunk.HasMetadata && chunk.Metadata.TryGetValue(ChunkMetadataKeys.ChunkRole, out var roleObj) && roleObj is string role)
         {
-            var chunkId = chunk.Metadata.TryGetValue("ChunkId", out var id) ? id : "";
-            if (role == "Parent")
+            var chunkId = chunk.Metadata.TryGetValue(ChunkMetadataKeys.ChunkId, out var id) ? id : "";
+            if (role == ChunkMetadataKeys.ParentRole)
             {
-                var childCount = chunk.Metadata.TryGetValue("ChildCount", out var cc) ? cc : 0;
+                var childCount = chunk.Metadata.TryGetValue(ChunkMetadataKeys.ChildCount, out var cc) ? cc : 0;
                 items.Add(new Markup($"[bold purple]👑 Parent Chunk • ID: {Markup.Escape(chunkId.ToString()!)} • Children: {childCount}[/]"));
                 items.Add(new Text(string.Empty));
             }
-            else if (role == "Child")
+            else if (role == ChunkMetadataKeys.ChildRole)
             {
-                var parentId = chunk.Metadata.TryGetValue("ParentId", out var pid) ? pid : "";
-                var childIndex = chunk.Metadata.TryGetValue("ChildIndex", out var ci) ? ci : 0;
-                var childCount = chunk.Metadata.TryGetValue("ChildCount", out var cc) ? cc : 0;
+                var parentId = chunk.Metadata.TryGetValue(ChunkMetadataKeys.ParentId, out var pid) ? pid : "";
+                var childIndex = chunk.Metadata.TryGetValue(ChunkMetadataKeys.ChildIndex, out var ci) ? ci : 0;
+                var childCount = chunk.Metadata.TryGetValue(ChunkMetadataKeys.ChildCount, out var cc) ? cc : 0;
                 items.Add(new Markup($"[bold skyblue1]🌱 Child Chunk #{childIndex} of {childCount} • Parent: {Markup.Escape(parentId.ToString()!)} • ID: {Markup.Escape(chunkId.ToString()!)}[/]"));
                 items.Add(new Text(string.Empty));
             }
@@ -159,7 +160,7 @@ public static partial class ConsoleFormatter
             foreach (var kvp in chunk.Metadata)
             {
                 // Skip contextual_header since it is showcased in its own callout panel
-                if (kvp.Key.Equals("contextual_header", StringComparison.OrdinalIgnoreCase))
+                if (kvp.Key.Equals(ChunkMetadataKeys.ContextualHeader, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }

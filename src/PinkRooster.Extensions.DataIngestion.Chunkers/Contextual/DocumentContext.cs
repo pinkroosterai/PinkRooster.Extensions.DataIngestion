@@ -11,13 +11,17 @@ internal sealed class DocumentContext
     private readonly HeadingRange[] _headings;
     private readonly (int Start, int End)[] _windows;
 
+    // One string per window, created on first use and shared by every chunk in that window. The producer is the
+    // only caller, so no synchronization is needed.
+    private readonly string?[] _windowText;
+
     internal DocumentContext(IngestionDocument document, TokenBudget budget, int overlap, CancellationToken cancellationToken)
     {
         StringBuilder text = new StringBuilder();
         List<HeadingRange> headings = [];
         foreach (IngestionDocumentSection section in document.Sections)
         {
-            AppendSection(section, [], text, headings, cancellationToken);
+            AppendSection(section, new HeadingTrail(), text, headings, cancellationToken);
         }
 
         _text = text.ToString();
@@ -26,9 +30,10 @@ internal sealed class DocumentContext
         _sourceOffsets = offsets.ToArray();
         _headings = headings.ToArray();
         _windows = FindWindows(_text, budget, overlap, cancellationToken).ToArray();
+        _windowText = new string?[_windows.Length];
     }
 
-    internal ReadOnlyMemory<char>? Find(IngestionChunk<string> chunk, CancellationToken cancellationToken)
+    internal string? Find(IngestionChunk<string> chunk, CancellationToken cancellationToken)
     {
         if (_windows.Length == 0)
         {
@@ -37,20 +42,20 @@ internal sealed class DocumentContext
 
         if (_windows.Length == 1)
         {
-            return _text.AsMemory();
+            return _text;
         }
 
         string context = Normalize(chunk.Context ?? "", cancellationToken);
         HeadingRange[] matches = context.Length == 0 ? [] :
             _headings.Where(heading =>
                 heading.Breadcrumb == context ||
-                heading.PlainBreadcrumb == context ||
-                heading.StrippedBreadcrumb == context).ToArray();
+                heading.RawBreadcrumb == context ||
+                heading.PlainBreadcrumb == context).ToArray();
         if (matches.Length == 0 && context.Length > 0)
         {
             matches = _headings.Where(heading =>
                 heading.Leaf == context ||
-                heading.StrippedLeaf == context).ToArray();
+                heading.RawLeaf == context).ToArray();
         }
 
         int? anchor = FindAnchor(chunk.Content, matches, cancellationToken);
@@ -80,7 +85,7 @@ internal sealed class DocumentContext
         }
 
         (int start, int end) = _windows[low];
-        return _text.AsMemory(start, end - start);
+        return _windowText[low] ??= _text[start..end];
     }
 
     private int? FindAnchor(string content, HeadingRange[] candidates, CancellationToken cancellationToken)
@@ -196,7 +201,7 @@ internal sealed class DocumentContext
         return start;
     }
 
-    private static void AppendSection(IngestionDocumentSection section, List<(int Level, string Text)> breadcrumbs,
+    private static void AppendSection(IngestionDocumentSection section, HeadingTrail trail,
         StringBuilder text, List<HeadingRange> headings, CancellationToken cancellationToken)
     {
         foreach (IngestionDocumentElement element in section.Elements)
@@ -204,7 +209,7 @@ internal sealed class DocumentContext
             cancellationToken.ThrowIfCancellationRequested();
             if (element is IngestionDocumentSection child)
             {
-                AppendSection(child, [.. breadcrumbs], text, headings, cancellationToken);
+                AppendSection(child, trail.Clone(), text, headings, cancellationToken);
                 continue;
             }
 
@@ -223,28 +228,23 @@ internal sealed class DocumentContext
             text.Append(markdown);
             if (element is IngestionDocumentHeader header)
             {
-                int level = header.Level ?? int.MaxValue;
-                while (breadcrumbs.Count > 0 && breadcrumbs[^1].Level >= level)
-                {
-                    breadcrumbs.RemoveAt(breadcrumbs.Count - 1);
-                }
-
-                breadcrumbs.Add((level, markdown));
+                trail.Open(header.Level, markdown);
             }
 
-            if (breadcrumbs.Count > 0)
+            if (trail.Breadcrumb is { } breadcrumb)
             {
+                // Chunkers in this package report the stripped breadcrumb; other chunkers may report the headings'
+                // source Markdown, joined either way, or only the innermost heading.
+                IReadOnlyList<string> raw = trail.RawHeadings;
                 headings.Add(new HeadingRange(start, text.Length,
-                    Normalize(string.Join(" > ", breadcrumbs.Select(item => item.Text)), cancellationToken),
-                    Normalize(string.Join(" ", breadcrumbs.Select(item => item.Text)), cancellationToken),
-                    Normalize(string.Join(" > ", breadcrumbs.Select(item => StripHeader(item.Text))), cancellationToken),
-                    Normalize(breadcrumbs[^1].Text, cancellationToken),
-                    Normalize(StripHeader(breadcrumbs[^1].Text), cancellationToken)));
+                    Normalize(breadcrumb, cancellationToken),
+                    Normalize(string.Join(HeadingTrail.Separator, raw), cancellationToken),
+                    Normalize(string.Join(" ", raw), cancellationToken),
+                    Normalize(trail.Leaf!, cancellationToken),
+                    Normalize(raw[^1], cancellationToken)));
             }
         }
     }
-
-    private static string StripHeader(string text) => text.TrimStart('#', ' ').Trim();
 
     private static string Normalize(string text, CancellationToken cancellationToken, List<int>? offsets = null)
     {
@@ -286,8 +286,8 @@ internal sealed class DocumentContext
         int Start,
         int End,
         string Breadcrumb,
+        string RawBreadcrumb,
         string PlainBreadcrumb,
-        string StrippedBreadcrumb,
         string Leaf,
-        string StrippedLeaf);
+        string RawLeaf);
 }

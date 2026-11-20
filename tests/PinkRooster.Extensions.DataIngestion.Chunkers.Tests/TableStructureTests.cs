@@ -7,7 +7,7 @@ namespace PinkRooster.Extensions.DataIngestion.Chunkers.Tests;
 
 public sealed class TableStructureTests
 {
-    private static readonly Tokenizer Tokenizer = TiktokenTokenizer.CreateForModel("gpt-4o");
+    private static readonly Tokenizer Tokenizer = TokenizerFixture.Instance;
 
     private static int Count(string text) => Tokenizer.CountTokens(text);
 
@@ -64,10 +64,10 @@ public sealed class TableStructureTests
 
         var doc = new IngestionDocument("doc1");
         var ingestionChunk = TableSplitter.CreateChunk(chunks[0], doc);
-        ingestionChunk.Metadata["IsTablePart"].Should().Be(true);
-        ingestionChunk.Metadata["IsTableContinuation"].Should().Be(false);
-        ingestionChunk.Metadata["TablePartIndex"].Should().Be(0);
-        ingestionChunk.Metadata["TableRowRange"].Should().Be("1-1");
+        ingestionChunk.Metadata[ChunkMetadataKeys.IsTablePart].Should().Be(true);
+        ingestionChunk.Metadata[ChunkMetadataKeys.IsTableContinuation].Should().Be(false);
+        ingestionChunk.Metadata[ChunkMetadataKeys.TablePartIndex].Should().Be(0);
+        ingestionChunk.Metadata[ChunkMetadataKeys.TableRowRange].Should().Be("1-1");
     }
 
     [Fact]
@@ -156,7 +156,7 @@ public sealed class TableStructureTests
         var chunks = splitter.Split(Markdown, table, TestContext.Current.CancellationToken).ToList();
 
         chunks.Should().HaveCount(1);
-        chunks[0].Content.Should().Be(Markdown);
+        chunks[0].Content.Should().Be(Markdown.TrimEnd('\n'));
         chunks[0].StartRow.Should().Be(0);
         chunks[0].EndRow.Should().Be(0);
     }

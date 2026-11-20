@@ -8,11 +8,11 @@ using PinkRooster.Extensions.DataIngestion.Chunkers;
 using PinkRooster.Extensions.DataIngestion.CodeAnalysis;
 using Xunit;
 
-namespace PinkRooster.Extensions.DataIngestion.Repository.Tests;
+namespace PinkRooster.Extensions.DataIngestion.CodeAnalysis.Tests;
 
 public sealed class RoslynCodeChunkerTests
 {
-    private static readonly Tokenizer Tokenizer = TiktokenTokenizer.CreateForModel("gpt-4o");
+    private static readonly Tokenizer Tokenizer = TokenizerFixture.Instance;
 
     [Fact]
     public async Task ReaderPreservesCodeAndBothChunkersConsumeTheSameDocument()
@@ -73,7 +73,7 @@ public sealed class RoslynCodeChunkerTests
         current.Content.Should().Contain("/// <summary>Returns the current value.</summary>").And.Contain("[Obsolete]");
         current.Context.Should().Contain("Namespace: Example.Code").And.Contain("Sample(int value) : Base(value)")
             .And.Contain("using System;");
-        current.Metadata["conditional_symbols"].Should().BeOfType<string[]>().Which.Should().ContainSingle().Which.Should().Be("FEATURE");
+        current.Metadata[ChunkMetadataKeys.ConditionalSymbols].Should().BeOfType<string[]>().Which.Should().ContainSingle().Which.Should().Be("FEATURE");
         chunks.Should().OnlyContain(chunk => !chunk.Content.Contains("#region", StringComparison.Ordinal) &&
             !chunk.Content.Contains("#endregion", StringComparison.Ordinal));
         string combined = string.Concat(chunks.Select(chunk => chunk.Content));
@@ -205,7 +205,7 @@ public sealed class RoslynCodeChunkerTests
 
         chunks.Should().ContainSingle();
         chunks[0].Content.Should().Contain("FeatureDisabled");
-        chunks[0].Metadata.ContainsKey("conditional_symbols").Should().BeFalse();
+        chunks[0].Metadata.ContainsKey(ChunkMetadataKeys.ConditionalSymbols).Should().BeFalse();
     }
 
     [Fact]

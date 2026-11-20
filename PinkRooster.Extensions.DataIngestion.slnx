@@ -11,6 +11,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PinkRooster.Extensions.DataIngestion.Chunkers.Tests/PinkRooster.Extensions.DataIngestion.Chunkers.Tests.csproj" />
+    <Project Path="tests/PinkRooster.Extensions.DataIngestion.CodeAnalysis.Tests/PinkRooster.Extensions.DataIngestion.CodeAnalysis.Tests.csproj" />
     <Project Path="tests/PinkRooster.Extensions.DataIngestion.Repository.Tests/PinkRooster.Extensions.DataIngestion.Repository.Tests.csproj" />
     <Project Path="tests/PinkRooster.Extensions.DataIngestion.Samples.Tests/PinkRooster.Extensions.DataIngestion.Samples.Tests.csproj" />
   </Folder>

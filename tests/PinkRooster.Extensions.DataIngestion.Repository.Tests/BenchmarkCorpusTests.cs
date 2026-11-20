@@ -9,7 +9,7 @@ namespace PinkRooster.Extensions.DataIngestion.Repository.Tests;
 public sealed class BenchmarkCorpusTests
 {
     private static readonly string Seed = Path.Combine(AppContext.BaseDirectory, "Evaluation");
-    private static readonly Tokenizer Tokenizer = TiktokenTokenizer.CreateForModel("gpt-4o");
+    private static readonly Tokenizer Tokenizer = TokenizerFixture.Instance;
 
     [Fact]
     public async Task SeedRunsThroughBothChunkersUsingTheSameDocuments()

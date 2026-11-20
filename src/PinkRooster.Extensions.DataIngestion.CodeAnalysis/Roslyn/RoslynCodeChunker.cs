@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.DataIngestion;
 using Microsoft.ML.Tokenizers;
+using PinkRooster.Extensions.DataIngestion.Chunkers;
 
 namespace PinkRooster.Extensions.DataIngestion.CodeAnalysis;
 
@@ -75,7 +76,7 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
                             document, slice.Context);
                         if (symbols.Length > 0)
                         {
-                            chunk.Metadata["conditional_symbols"] = symbols;
+                            chunk.Metadata[ChunkMetadataKeys.ConditionalSymbols] = symbols;
                         }
 
                         yield return chunk;
@@ -138,12 +139,15 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
             List<string> names = new List<string> { MemberName(member) };
             if (Fits(source, group))
             {
+                // Members ending within the budget's character reach are added without re-counting the growing
+                // group; only a member past that reach is counted, and it ends the group when it does not fit.
+                int reach = group.Start + PrefixLength(source, TextSpan.FromBounds(group.Start, span.End));
                 while (index < members.Count && members[index] is not (BaseTypeDeclarationSyntax or BaseNamespaceDeclarationSyntax))
                 {
                     token.ThrowIfCancellationRequested();
                     MemberDeclarationSyntax next = members[index];
                     TextSpan combined = TextSpan.FromBounds(group.Start, next.FullSpan.End);
-                    if (!Fits(source, combined))
+                    if (combined.End > reach && !Fits(source, combined))
                     {
                         break;
                     }
@@ -256,13 +260,14 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
         {
             token.ThrowIfCancellationRequested();
             TextSpan remaining = TextSpan.FromBounds(cursor, span.End);
-            if (Fits(source, remaining))
+            int prefix = PrefixLength(source, remaining);
+            if (prefix >= remaining.Length && Fits(source, remaining))
             {
                 yield return remaining;
                 yield break;
             }
 
-            int limit = FindLimit(source, remaining, token);
+            int limit = FindLimit(source, remaining, prefix, token);
             if (limit <= covered)
             {
                 if (cursor < covered)
@@ -300,12 +305,11 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
         }
     }
 
-    private int FindLimit(string source, TextSpan span, CancellationToken token)
+    private int FindLimit(string source, TextSpan span, int prefix, CancellationToken token)
     {
         ReadOnlySpan<char> text = source.AsSpan(span.Start, span.Length);
         int first = text.Length > 1 && char.IsSurrogatePair(text[0], text[1]) ? 2 : 1;
-        int length = Math.Max(first, _tokenizer.GetIndexByTokenCount(text, _maxTokens, out _, out _,
-            considerNormalization: false));
+        int length = Math.Max(first, prefix);
         while (length >= first)
         {
             token.ThrowIfCancellationRequested();
@@ -353,6 +357,14 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
 
         return limit;
     }
+
+    /// <summary>
+    /// The number of leading characters of <paramref name="span"/> within the token budget. The tokenizer stops once
+    /// the budget is reached, so this costs the budget rather than the span.
+    /// </summary>
+    private int PrefixLength(string source, TextSpan span) =>
+        _tokenizer.GetIndexByTokenCount(source.AsSpan(span.Start, span.Length), _maxTokens, out _, out _,
+            considerNormalization: false);
 
     private bool Fits(string source, TextSpan span) =>
         _tokenizer.CountTokens(source.AsSpan(span.Start, span.Length), considerNormalization: false) <= _maxTokens;

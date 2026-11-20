@@ -74,12 +74,12 @@ public sealed class ContextualSchedulingTests
         responses[0].SetResult();
         (await first.WaitAsync(Timeout, cancellationToken)).Should().BeTrue();
         Volatile.Read(ref admitted).Should().Be(3);
-        List<string> headers = [(string)reader.Current.Metadata["contextual_header"]];
+        List<string> headers = [(string)reader.Current.Metadata[ChunkMetadataKeys.ContextualHeader]];
         responses[3].SetResult();
         responses[4].SetResult();
         while (await reader.MoveNextAsync())
         {
-            headers.Add((string)reader.Current.Metadata["contextual_header"]);
+            headers.Add((string)reader.Current.Metadata[ChunkMetadataKeys.ContextualHeader]);
         }
 
         headers.Should().Equal("context 0", "context 1", "context 2", "context 3", "context 4");

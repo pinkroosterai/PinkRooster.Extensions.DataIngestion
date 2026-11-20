@@ -7,7 +7,7 @@ namespace PinkRooster.Extensions.DataIngestion.Chunkers;
 /// <summary>Configures contextual enrichment of ingestion chunks.</summary>
 /// <param name="chatClient">The client that generates contextual headers.</param>
 /// <param name="chatTokenizer">The tokenizer used to budget document context.</param>
-public sealed class ContextualChunkerOptions(IChatClient chatClient, Tokenizer chatTokenizer) : EnricherOptions(chatClient)
+public sealed class ContextualChunkProcessorOptions(IChatClient chatClient, Tokenizer chatTokenizer) : EnricherOptions(chatClient)
 {
     /// <summary>Gets the tokenizer used to measure document context sent to the client.</summary>
     public Tokenizer ChatTokenizer { get; } = chatTokenizer ?? throw new ArgumentNullException(nameof(chatTokenizer));

@@ -13,7 +13,7 @@ public sealed class ContextualChunkProcessorTests
         using var client = Reply("Dispatch timing");
         var original = Chunk("Ships the same day.");
         original.Metadata["number"] = 42;
-        original.Metadata["contextual_header"] = "upstream value";
+        original.Metadata[ChunkMetadataKeys.ContextualHeader] = "upstream value";
 
         var result = (await ReadAsync(new(Options(client)), original)).Single();
 
@@ -23,8 +23,8 @@ public sealed class ContextualChunkProcessorTests
         result.Content.Should().Be("Dispatch timing\n\nShips the same day.");
         result.Metadata.Should().NotBeSameAs(original.Metadata);
         result.Metadata["number"].Should().Be(42);
-        result.Metadata["contextual_header"].Should().Be("Dispatch timing");
-        original.Metadata["contextual_header"].Should().Be("upstream value");
+        result.Metadata[ChunkMetadataKeys.ContextualHeader].Should().Be("Dispatch timing");
+        original.Metadata[ChunkMetadataKeys.ContextualHeader].Should().Be("upstream value");
         original.Content.Should().Be("Ships the same day.");
     }
 
@@ -43,7 +43,7 @@ public sealed class ContextualChunkProcessorTests
         var result = (await ReadAsync(new(options), Chunk(Body))).Single();
 
         result.Content.Should().Be("🙂\n\nworld");
-        result.Metadata["contextual_header"].Should().Be("🙂");
+        result.Metadata[ChunkMetadataKeys.ContextualHeader].Should().Be("🙂");
         Count(result.Content).Should().Be(cap);
     }
 
@@ -75,8 +75,8 @@ public sealed class ContextualChunkProcessorTests
     public void RejectsInvalidOptions()
     {
         using var client = Reply("x");
-        Action missingClient = () => _ = new ContextualChunkerOptions(null!, TokenizerFixture.Instance);
-        Action missingTokenizer = () => _ = new ContextualChunkerOptions(client, null!);
+        Action missingClient = () => _ = new ContextualChunkProcessorOptions(null!, TokenizerFixture.Instance);
+        Action missingTokenizer = () => _ = new ContextualChunkProcessorOptions(client, null!);
         Action missingOptions = () => _ = new ContextualChunkProcessor(null!);
         missingClient.Should().Throw<ArgumentNullException>();
         missingTokenizer.Should().Throw<ArgumentNullException>();
@@ -101,10 +101,10 @@ public sealed class ContextualChunkProcessorTests
         options.MaxEnrichedTokens = 0;
         invalid.Should().Throw<ArgumentOutOfRangeException>();
         options.MaxEnrichedTokens = 1;
-        invalid.Should().Throw<ArgumentException>().WithParameterName("EmbeddingTokenizer");
+        invalid.Should().Throw<ArgumentException>().WithParameterName("options");
     }
 
-    internal static ContextualChunkerOptions Options(IChatClient client) => new(client, TokenizerFixture.Instance);
+    internal static ContextualChunkProcessorOptions Options(IChatClient client) => new(client, TokenizerFixture.Instance);
 
     internal static IngestionChunk<string> Chunk(string body) => new(body,
         RecursiveTokenChunkerTests.Document(new IngestionDocumentParagraph(body)), "# Orders");

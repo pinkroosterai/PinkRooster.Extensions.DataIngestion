@@ -24,7 +24,8 @@ public sealed class QuickstartTests
     {
         int from = text.IndexOf(start, StringComparison.Ordinal);
         int to = text.IndexOf(end, StringComparison.Ordinal);
-        Assert.True(from >= 0 && to > from, $"'{start}' and '{end}' not found in that order");
+        from.Should().BeGreaterThanOrEqualTo(0, $"'{start}' must appear");
+        to.Should().BeGreaterThan(from, $"'{end}' must follow '{start}'");
         return text[(from + start.Length)..to];
     }
 

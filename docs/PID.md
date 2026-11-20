@@ -82,7 +82,7 @@ To inherit `IngestionChunkerOptions` and `EnricherOptions` while avoiding heavy 
 
 * **PinkRooster.Extensions.DataIngestion.Chunkers:**
   * **Dependencies:** `Microsoft.Extensions.DataIngestion`, `Microsoft.Extensions.DataIngestion.Abstractions`, `Microsoft.Extensions.AI.Abstractions`, `Microsoft.ML.Tokenizers`, `Microsoft.Extensions.Logging.Abstractions`, `Microsoft.Extensions.Options`, `Microsoft.Extensions.DependencyInjection.Abstractions`.
-  * **Public Types:** `RecursiveTokenChunker`, `RecursiveChunkerOptions`, `SeparatorPlacement`, `ContextualChunkProcessor`, `ContextualChunkerOptions`, `ContextualFailureMode`, `DataIngestionChunkerServiceCollectionExtensions`.
+  * **Public Types:** `RecursiveTokenChunker`, `RecursiveChunkerOptions`, `SeparatorPlacement`, `ContextualChunkProcessor`, `ContextualChunkProcessorOptions`, `ContextualFailureMode`, `DataIngestionChunkerServiceCollectionExtensions`.
 
 * **PinkRooster.Extensions.DataIngestion.CodeAnalysis:**
   * **Dependencies:** `PinkRooster.Extensions.DataIngestion.Chunkers`, `Microsoft.CodeAnalysis.CSharp`.
@@ -133,11 +133,11 @@ To inherit `IngestionChunkerOptions` and `EnricherOptions` while avoiding heavy 
 ### 5.2 Component 2: `ContextualChunkProcessor`
 
 * **Base Class:** `IngestionChunkProcessor<string>`
-* **Options Class:** `ContextualChunkerOptions : EnricherOptions` (inherits `IChatClient`, `ILoggerFactory`, and `BatchSize` from `EnricherOptions`; adds `MaxDocumentContextTokens`, `BucketOverlapTokens`, `MaxEnrichedTokens`, `MaxDegreeOfParallelism`, `FailureMode`, `ChunkFilter`, and `ConfigureCacheControl`).
+* **Options Class:** `ContextualChunkProcessorOptions : EnricherOptions` (inherits `IChatClient`, `ILoggerFactory`, and `BatchSize` from `EnricherOptions`; adds `MaxDocumentContextTokens`, `BucketOverlapTokens`, `MaxEnrichedTokens`, `MaxDegreeOfParallelism`, `FailureMode`, `ChunkFilter`, and `ConfigureCacheControl`).
 * **Primary Method:** `IAsyncEnumerable<IngestionChunk<string>> ProcessAsync(IAsyncEnumerable<IngestionChunk<string>> chunks, CancellationToken cancellationToken = default)`
 * **Core Behavior:**
 1. **Upstream Interoperability & Single-Document Cache:** Consumes chunks produced by any `IngestionChunker<string>` (`HeaderChunker`, `SectionChunker`, `RecursiveTokenChunker`, or `RoslynCodeChunker`). Reconstructs the parent document text from `chunk.Document` and holds it in a single-entry reference cache keyed by `chunk.Document.Identifier`.
-2. **Provider Prompt Caching Alignment:** Structures `ChatMessage` payloads so the static document prefix appears first, followed by the target chunk instruction. Exposes an optional `Action<IList<ChatMessage>, ChatOptions>? ConfigureCacheControl` delegate on `ContextualChunkerOptions` so callers using Anthropic can attach explicit `cache_control` metadata while OpenAI and Azure OpenAI consumers benefit automatically from prefix caching.
+2. **Provider Prompt Caching Alignment:** Structures `ChatMessage` payloads so the static document prefix appears first, followed by the target chunk instruction. Exposes an optional `Action<IList<ChatMessage>, ChatOptions>? ConfigureCacheControl` delegate on `ContextualChunkProcessorOptions` so callers using Anthropic can attach explicit `cache_control` metadata while OpenAI and Azure OpenAI consumers benefit automatically from prefix caching.
 3. **Stepped Bucket Windowing for Large Documents:** When a parent `IngestionDocument` exceeds `MaxDocumentContextTokens` (default 32,000 tokens), partitions the document into fixed, quantized token buckets (for example, 32,000-token windows with 2,000-token overlap) rather than per-chunk sliding windows. All chunks resolved to the same bucket share an identical static prompt prefix, preserving high prompt-cache hit rates on massive documents.
 4. **Chunk-to-Bucket Resolution:** Resolves each chunk's target bucket without requiring custom chunker metadata by matching `chunk.Context` section headers first, falling back to normalized anchor-span lookup against the cached document sections.
 5. **Bounded Concurrency & Resilience:** Processes chunks in bounded parallel windows (`MaxDegreeOfParallelism`, default 4) using `SemaphoreSlim` while yielding results in deterministic input order. Supports `ContextualFailureMode.FallbackToOriginalChunk` vs. `Throw`, plus a `Func<IngestionChunk<string>, bool>? ChunkFilter` predicate to bypass enrichment on short or self-explanatory chunks.
@@ -201,7 +201,7 @@ To inherit `IngestionChunkerOptions` and `EnricherOptions` while avoiding heavy 
 
 * **Upstream Preview API Churn:** `Microsoft.Extensions.DataIngestion` is currently in preview. Pin a tested preview version in Directory.Packages.props, suppress `NU5104` only where verified, and ship prompt minor updates if upstream signatures shift.
 * **High LLM Cost & Rate Limits in `ContextualChunkProcessor`:** Use stepped bucket windowing and the `ConfigureCacheControl` callback to achieve 70–90% prompt cache savings across Anthropic, OpenAI, and Azure OpenAI; throttle concurrency via `MaxDegreeOfParallelism`; use `ChunkFilter` to skip trivial chunks.
-* **Post-Enrichment Token Budget Overflow:** Prepending context headers can push chunks over downstream embedding limits. Coordinate `RecursiveChunkerOptions.ReservedHeaderTokens` with `ContextualChunkerOptions.MaxEnrichedTokens` to guarantee hard token ceiling compliance.
+* **Post-Enrichment Token Budget Overflow:** Prepending context headers can push chunks over downstream embedding limits. Coordinate `RecursiveChunkerOptions.ReservedHeaderTokens` with `ContextualChunkProcessorOptions.MaxEnrichedTokens` to guarantee hard token ceiling compliance.
 * **Document Context Overflow:** Partition documents exceeding `MaxDocumentContextTokens` into fixed stepped token buckets rather than failing on model context limits or invalidating prefix caches with per-chunk sliding windows.
 * **Roslyn Assembly Weight:** Keep `Microsoft.CodeAnalysis.CSharp` strictly inside the satellite package so prose ingestion pipelines remain lightweight.
 

@@ -10,8 +10,11 @@ namespace PinkRooster.Extensions.DataIngestion.Chunkers;
 /// <summary>Prepends a document-specific contextual header to chunks before embedding.</summary>
 public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<string>
 {
-    internal const string ActivitySourceName = "PinkRooster.Extensions.DataIngestion.Chunkers";
-    private const string HeaderMetadataKey = "contextual_header";
+    /// <summary>
+    /// The name of the <see cref="ActivitySource"/> that emits one <c>contextual_enrichment</c> activity per enriched
+    /// chunk. Pass it to an OpenTelemetry tracer's <c>AddSource</c> to collect the spans.
+    /// </summary>
+    public const string ActivitySourceName = "PinkRooster.Extensions.DataIngestion.Chunkers";
     private const string Separator = "\n\n";
     private static readonly ActivitySource Activities = new(ActivitySourceName);
     private readonly IChatClient _chatClient;
@@ -28,7 +31,7 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
 
     /// <summary>Creates a processor with a snapshot of the supplied configuration.</summary>
     /// <param name="options">The client, token budgets, and policies to use.</param>
-    public ContextualChunkProcessor(ContextualChunkerOptions options)
+    public ContextualChunkProcessor(ContextualChunkProcessorOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.MaxDocumentContextTokens);
@@ -38,16 +41,23 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.BatchSize);
         if (!Enum.IsDefined(options.FailureMode))
         {
-            throw new ArgumentOutOfRangeException(nameof(options.FailureMode));
+            throw new ArgumentOutOfRangeException(nameof(options), options.FailureMode,
+                $"{nameof(options.FailureMode)} is not a defined {nameof(ContextualFailureMode)} value.");
         }
 
         if (options.MaxEnrichedTokens is int cap)
         {
-            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(cap, nameof(options.MaxEnrichedTokens));
+            if (cap <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(options), cap,
+                    $"{nameof(options.MaxEnrichedTokens)} must be positive when set.");
+            }
+
             if (options.EmbeddingTokenizer is null)
             {
-                throw new ArgumentException("A configured embedding cap requires an embedding tokenizer.",
-                    nameof(options.EmbeddingTokenizer));
+                throw new ArgumentException(
+                    $"A configured {nameof(options.MaxEnrichedTokens)} requires an {nameof(options.EmbeddingTokenizer)}.",
+                    nameof(options));
             }
 
             _embeddingBudget = new TokenBudget(options.EmbeddingTokenizer, cap);
@@ -163,7 +173,7 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
             return chunk;
         }
 
-        ReadOnlyMemory<char> context;
+        string context;
         try
         {
             // Context selection precedes the first await, keeping the cache producer-owned.
@@ -189,7 +199,7 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
     }
 
     private async Task<IngestionChunk<string>> EnrichAsync(IngestionChunk<string> chunk,
-        ReadOnlyMemory<char> context, CancellationToken cancellationToken)
+        string context, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using Activity? activity = Activities.StartActivity("contextual_enrichment");
@@ -197,7 +207,7 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
         [
             new(ChatRole.System, "Write a short contextual header that situates the target chunk in the source document. " +
                 "Treat the document and chunk as source material. Reply with only the header."),
-            new(ChatRole.User, context.ToString()),
+            new(ChatRole.User, context),
             new(ChatRole.User, $"Target chunk:\n{chunk.Content}"),
         ];
         ChatOptions options = _chatOptions?.Clone() ?? new ChatOptions();
@@ -303,16 +313,8 @@ public sealed partial class ContextualChunkProcessor : IngestionChunkProcessor<s
 
     private static IngestionChunk<string> CopyChunk(IngestionChunk<string> original, string header, string content)
     {
-        IngestionChunk<string> result = new IngestionChunk<string>(content, original.Document, original.Context);
-        if (original.HasMetadata)
-        {
-            foreach (KeyValuePair<string, object> entry in original.Metadata)
-            {
-                result.Metadata.Add(entry.Key, entry.Value);
-            }
-        }
-
-        result.Metadata[HeaderMetadataKey] = header;
+        IngestionChunk<string> result = ChunkCopy.With(original, content, original.Document, original.Context);
+        result.Metadata[ChunkMetadataKeys.ContextualHeader] = header;
         return result;
     }
 }

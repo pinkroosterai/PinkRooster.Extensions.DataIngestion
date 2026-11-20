@@ -1,3 +1,4 @@
+using AwesomeAssertions;
 using System.Text.RegularExpressions;
 using Xunit;
 
@@ -32,7 +33,7 @@ public sealed partial class PackedReadmeTests
     {
         string[] offenders = [.. Targets(Read(file)).Where(target => !IsAbsolute(target) && !target.StartsWith('#')).Select(target => $"{file}: '{target}'")];
 
-        Assert.True(offenders.Length == 0, $"NuGet.org shows a relative link or image as broken; use an absolute https://github.com/pinkroosterai/PinkRooster.Extensions.DataIngestion/blob/main/... URL:\n{string.Join("\n", offenders)}");
+        offenders.Should().BeEmpty($"NuGet.org shows a relative link or image as broken; use an absolute https://github.com/pinkroosterai/PinkRooster.Extensions.DataIngestion/blob/main/... URL:\n{string.Join("\n", offenders)}");
     }
 
     [Theory]
@@ -59,7 +60,7 @@ public sealed partial class PackedReadmeTests
             }
         }
 
-        Assert.True(offenders.Count == 0, $"NuGet.org does not render these images:\n{string.Join("\n", offenders)}");
+        offenders.Should().BeEmpty($"NuGet.org does not render these images:\n{string.Join("\n", offenders)}");
     }
 
     [Theory]
@@ -68,7 +69,7 @@ public sealed partial class PackedReadmeTests
     {
         string[] untagged = [.. OpeningFences(Read(file)).Where(fence => fence.Info.Length == 0).Select(fence => $"{file}:{fence.Line}")];
 
-        Assert.True(untagged.Length == 0, $"A code fence without a language is not highlighted on NuGet.org; tag it (text, csharp, json):\n{string.Join("\n", untagged)}");
+        untagged.Should().BeEmpty($"A code fence without a language is not highlighted on NuGet.org; tag it (text, csharp, json):\n{string.Join("\n", untagged)}");
     }
 
     [Fact]
@@ -82,7 +83,7 @@ public sealed partial class PackedReadmeTests
                 .Select(entry => $"{entry.file}:{entry.number}: {entry.line.Trim()}"),
         ];
 
-        Assert.True(offenders.Length == 0, $"No stable version exists yet, so `dotnet add package` needs --prerelease:\n{string.Join("\n", offenders)}");
+        offenders.Should().BeEmpty($"No stable version exists yet, so `dotnet add package` needs --prerelease:\n{string.Join("\n", offenders)}");
     }
 
     private static bool IsAbsolute(string target) =>

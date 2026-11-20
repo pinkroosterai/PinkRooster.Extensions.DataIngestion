@@ -48,7 +48,7 @@ public sealed class ContextualEnrichmentScenario : ISampleScenario
 
         // 2. Configure the contextual chunk processor with prompt cache hooks and selective filtering
         var chatClient = new SampleContextualChatClient();
-        var contextualOptions = new ContextualChunkerOptions(chatClient, _tokenizer)
+        var contextualOptions = new ContextualChunkProcessorOptions(chatClient, _tokenizer)
         {
             EmbeddingTokenizer = _tokenizer,
             MaxEnrichedTokens = 96,

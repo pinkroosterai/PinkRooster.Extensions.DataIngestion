@@ -6,6 +6,11 @@ namespace PinkRooster.Extensions.DataIngestion.Chunkers;
 /// <summary>
 /// Configures streaming dual-granularity chunking with parent-child linkage.
 /// </summary>
+/// <remarks>
+/// The inherited <see cref="IngestionChunkerOptions.MaxTokensPerChunk"/> and
+/// <see cref="IngestionChunkerOptions.OverlapTokens"/> configure the child chunks and default to 256 and 32 tokens.
+/// <see cref="HierarchicalTokenChunker"/> validates the combined settings when it is constructed.
+/// </remarks>
 public sealed class HierarchicalChunkerOptions : IngestionChunkerOptions
 {
     private int _parentMaxTokens = 1024;
@@ -58,27 +63,5 @@ public sealed class HierarchicalChunkerOptions : IngestionChunkerOptions
     {
         get => _emissionMode;
         set => _emissionMode = value;
-    }
-
-    /// <summary>
-    /// Validates that parent and child token budgets satisfy hierarchical constraints.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when <see cref="ParentMaxTokens"/> is less than <see cref="IngestionChunkerOptions.MaxTokensPerChunk"/>
-    /// or when <see cref="ParentOverlapTokens"/> is greater than or equal to <see cref="ParentMaxTokens"/>.
-    /// </exception>
-    public void Validate()
-    {
-        if (_parentMaxTokens < MaxTokensPerChunk)
-        {
-            throw new InvalidOperationException(
-                $"ParentMaxTokens ({_parentMaxTokens}) must be greater than or equal to child MaxTokensPerChunk ({MaxTokensPerChunk}).");
-        }
-
-        if (_parentOverlapTokens >= _parentMaxTokens)
-        {
-            throw new InvalidOperationException(
-                $"ParentOverlapTokens ({_parentOverlapTokens}) must be strictly less than ParentMaxTokens ({_parentMaxTokens}).");
-        }
     }
 }

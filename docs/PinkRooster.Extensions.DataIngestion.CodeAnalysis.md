@@ -59,10 +59,11 @@ await foreach (IngestionChunk<string> chunk in chunker.ProcessAsync(doc))
 
 - **Grammar-Aware Splitting**: Preserves syntax node integrity (method signatures, type declarations, attributes, and doc comments).
 - **Symbol Breadcrumbs**: Automatically annotates each chunk with its fully-qualified member context (`chunk.Context`).
+- **Conditional Compilation Metadata**: Chunks inside `#if` blocks carry their active preprocessor symbols under `ChunkMetadataKeys.ConditionalSymbols` (`conditional_symbols`), a constant from the Chunkers package.
 - **Enclosing Type Context**: Optionally retains enclosing type declaration signatures when sub-chunking oversized method bodies.
 
 ## Compatibility
 
 - Target Framework: .NET 10 (`net10.0`)
-- Dependencies: `Microsoft.CodeAnalysis.CSharp`, `PinkRooster.Extensions.DataIngestion.Chunkers`
+- Dependencies: `Microsoft.CodeAnalysis.CSharp`, `Microsoft.ML.Tokenizers`, `Microsoft.Extensions.DependencyInjection.Abstractions`, `PinkRooster.Extensions.DataIngestion.Chunkers`
 - Repository: [https://github.com/pinkroosterai/PinkRooster.Extensions.DataIngestion](https://github.com/pinkroosterai/PinkRooster.Extensions.DataIngestion)

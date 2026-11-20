@@ -53,7 +53,7 @@ public sealed class ContextualLiveCacheTests(ITestOutputHelper output)
         await foreach (var result in new ContextualChunkProcessor(options)
                            .ProcessAsync(Enumerate(targets), TestContext.Current.CancellationToken))
         {
-            result.Metadata.Should().ContainKey("contextual_header");
+            result.Metadata.Should().ContainKey(ChunkMetadataKeys.ContextualHeader);
             completed++;
             if (completed > 1 && observations[^1] > 0)
             {

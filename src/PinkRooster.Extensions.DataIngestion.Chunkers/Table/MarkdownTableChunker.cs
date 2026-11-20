@@ -7,22 +7,31 @@ namespace PinkRooster.Extensions.DataIngestion.Chunkers;
 public sealed class MarkdownTableChunker : IngestionChunker<string>
 {
     private readonly TokenBudget _budget;
-    private readonly TableSplitter _tableSplitter;
+    private readonly ProtectedChunker _tables;
     private readonly bool _emitNonTableContent;
 
     /// <summary>Initializes a new instance of the <see cref="MarkdownTableChunker"/> class.</summary>
-    /// <param name="options">The chunker configuration and tokenizer.</param>
+    /// <param name="options">
+    /// The chunker configuration and tokenizer. <see cref="IngestionChunkerOptions.OverlapTokens"/> does not apply:
+    /// table parts repeat the header instead, and prose between tables is sliced without overlap.
+    /// </param>
     public MarkdownTableChunker(TableChunkerOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(options.Tokenizer);
         ArgumentOutOfRangeException.ThrowIfNegative(options.ReservedHeaderTokens);
+        ArgumentOutOfRangeException.ThrowIfNegative(options.OverlapTokens);
 
         int limit = options.MaxTokensPerChunk - options.ReservedHeaderTokens;
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit, nameof(options.ReservedHeaderTokens));
+        if (limit <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), options.ReservedHeaderTokens,
+                $"{nameof(options.ReservedHeaderTokens)} must be less than {nameof(options.MaxTokensPerChunk)}.");
+        }
+
 
         _budget = new TokenBudget(options.Tokenizer, limit);
-        _tableSplitter = new TableSplitter(_budget);
+        _tables = new ProtectedChunker(_budget);
         _emitNonTableContent = options.EmitNonTableContent;
     }
 
@@ -36,7 +45,7 @@ public sealed class MarkdownTableChunker : IngestionChunker<string>
 
         foreach (IngestionDocumentSection section in document.Sections)
         {
-            foreach (IngestionChunk<string> chunk in ProcessSection(document, section, [], cancellationToken))
+            foreach (IngestionChunk<string> chunk in ProcessSection(document, section, new HeadingTrail(), cancellationToken))
             {
                 yield return chunk;
             }
@@ -46,10 +55,10 @@ public sealed class MarkdownTableChunker : IngestionChunker<string>
     private IEnumerable<IngestionChunk<string>> ProcessSection(
         IngestionDocument document,
         IngestionDocumentSection section,
-        List<(int Level, string Text)> headings,
+        HeadingTrail headings,
         CancellationToken cancellationToken)
     {
-        string? context = Breadcrumb(headings);
+        string? context = headings.Breadcrumb;
 
         foreach (IngestionDocumentElement element in section.Elements)
         {
@@ -57,14 +66,14 @@ public sealed class MarkdownTableChunker : IngestionChunker<string>
 
             if (element is IngestionDocumentHeader header)
             {
-                UpdateHeadings(headings, header);
-                context = Breadcrumb(headings);
+                headings.Open(header);
+                context = headings.Breadcrumb;
                 continue;
             }
 
             if (element is IngestionDocumentSection child)
             {
-                foreach (IngestionChunk<string> chunk in ProcessSection(document, child, [.. headings], cancellationToken))
+                foreach (IngestionChunk<string> chunk in ProcessSection(document, child, headings.Clone(), cancellationToken))
                 {
                     yield return chunk;
                 }
@@ -77,18 +86,10 @@ public sealed class MarkdownTableChunker : IngestionChunker<string>
                 string? tableMarkdown = table.GetMarkdown();
                 if (!string.IsNullOrWhiteSpace(tableMarkdown))
                 {
-                    MarkdownTable found = MarkdownTable.Find(tableMarkdown, cancellationToken).FirstOrDefault();
-                    if (found != default)
+                    foreach (TableChunk part in _tables.Table(table, tableMarkdown, repeatHeaders: true, cancellationToken))
                     {
-                        foreach (TableChunk part in _tableSplitter.Split(tableMarkdown, found, cancellationToken))
-                        {
-                            yield return TableSplitter.CreateChunk(part, document, context);
-                        }
-                    }
-                    else
-                    {
-                        // Fallback: emit table markdown directly if delimiter wasn't parsed
-                        yield return new IngestionChunk<string>(tableMarkdown, document, context);
+                        cancellationToken.ThrowIfCancellationRequested();
+                        yield return TableSplitter.CreateChunk(part, document, context);
                     }
                 }
 
@@ -105,78 +106,46 @@ public sealed class MarkdownTableChunker : IngestionChunker<string>
             foreach (MarkdownTable mdTable in MarkdownTable.Find(markdown, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-
-                // Check for non-table prose before this table
-                if (_emitNonTableContent && mdTable.Start > lastIndex)
+                foreach (IngestionChunk<string> proseChunk in SliceProse(markdown, lastIndex, mdTable.Start, document, context, cancellationToken))
                 {
-                    string prose = markdown[lastIndex..mdTable.Start].Trim();
-                    if (!string.IsNullOrWhiteSpace(prose))
-                    {
-                        foreach (IngestionChunk<string> proseChunk in SliceProse(prose, document, context, cancellationToken))
-                        {
-                            yield return proseChunk;
-                        }
-                    }
+                    yield return proseChunk;
                 }
 
-                // Emit table chunks with repeated headers and metadata
-                foreach (TableChunk part in _tableSplitter.Split(markdown, mdTable, cancellationToken))
+                foreach (TableChunk part in _tables.Table(markdown, mdTable, repeatHeaders: true, cancellationToken))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     yield return TableSplitter.CreateChunk(part, document, context);
                 }
 
                 lastIndex = mdTable.End;
             }
 
-            // Check for trailing non-table prose after the last table
-            if (_emitNonTableContent && lastIndex < markdown.Length)
+            foreach (IngestionChunk<string> proseChunk in SliceProse(markdown, lastIndex, markdown.Length, document, context, cancellationToken))
             {
-                string trailing = markdown[lastIndex..].Trim();
-                if (!string.IsNullOrWhiteSpace(trailing))
-                {
-                    foreach (IngestionChunk<string> proseChunk in SliceProse(trailing, document, context, cancellationToken))
-                    {
-                        yield return proseChunk;
-                    }
-                }
+                yield return proseChunk;
             }
         }
     }
 
+    /// <summary>Slices the trimmed prose in <c>markdown[start..end]</c>, allocating only the emitted chunk strings.</summary>
     private IEnumerable<IngestionChunk<string>> SliceProse(
-        string prose, IngestionDocument document, string? context, CancellationToken cancellationToken)
+        string markdown, int start, int end, IngestionDocument document, string? context, CancellationToken cancellationToken)
     {
-        int start = 0;
-        while (start < prose.Length)
+        if (!_emitNonTableContent || end <= start)
+        {
+            yield break;
+        }
+
+        ReadOnlySpan<char> span = markdown.AsSpan(start, end - start);
+        int leading = span.Length - span.TrimStart().Length;
+        start += leading;
+        end = start + span.Trim().Length;
+        while (start < end)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            int remaining = prose.Length - start;
-            int sliceLen = TextBoundaries.FindPrefix(_budget, prose.AsSpan(start, remaining), _budget.Limit, cancellationToken);
-            if (sliceLen <= 0)
-            {
-                sliceLen = Math.Min(remaining, _budget.PrefixIndex(prose.AsSpan(start, remaining), _budget.Limit));
-                if (sliceLen <= 0)
-                {
-                    sliceLen = 1;
-                }
-            }
-
-            yield return new IngestionChunk<string>(prose.Substring(start, sliceLen), document, context);
+            int sliceLen = TextBoundaries.ForcedPrefix(_budget, markdown.AsSpan(start, end - start), _budget.Limit, cancellationToken);
+            yield return new IngestionChunk<string>(markdown.Substring(start, sliceLen), document, context);
             start += sliceLen;
         }
     }
-
-    private static void UpdateHeadings(List<(int Level, string Text)> headings, IngestionDocumentHeader header)
-    {
-        int level = header.Level ?? int.MaxValue;
-        string text = (header.GetMarkdown() ?? string.Empty).TrimStart('#', ' ').Trim();
-        headings.RemoveAll(h => h.Level >= level);
-        if (!string.IsNullOrWhiteSpace(text))
-        {
-            headings.Add((level, text));
-        }
-    }
-
-    private static string? Breadcrumb(List<(int Level, string Text)> headings) =>
-        headings.Count == 0 ? null : string.Join(" > ", headings.Select(h => h.Text));
 }

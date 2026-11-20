@@ -60,7 +60,7 @@ public sealed class HierarchicalChunkerScenario : ISampleScenario
             int tokens = _tokenizer.CountTokens(chunk.Content, considerNormalization: false);
             totalTokens += tokens;
 
-            int ceiling = (string)chunk.Metadata["ChunkRole"] == "Parent" ? options.ParentMaxTokens : options.MaxTokensPerChunk;
+            int ceiling = (string)chunk.Metadata[ChunkMetadataKeys.ChunkRole] == ChunkMetadataKeys.ParentRole ? options.ParentMaxTokens : options.MaxTokensPerChunk;
             ConsoleFormatter.PrintChunk(Name, chunkIndex, chunk, tokens, ceiling);
         }
 

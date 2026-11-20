@@ -22,7 +22,8 @@ internal sealed class TableSplitter(TokenBudget budget)
         int tableLength = table.End - table.Start;
         if (budget.Count(markdown.AsSpan(table.Start, tableLength)) <= budget.Limit)
         {
-            chunks.Add(new TableChunk(markdown[table.Start..table.End], 0, false, table.RowCount > 0 ? 1 : 0, table.RowCount));
+            chunks.Add(new TableChunk(WithoutFinalLineBreak(markdown.AsSpan(table.Start, tableLength)), 0, false,
+                table.RowCount > 0 ? 1 : 0, table.RowCount));
             return chunks;
         }
 
@@ -42,15 +43,7 @@ internal sealed class TableSplitter(TokenBudget budget)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 int remaining = table.End - start;
-                int sliceLen = TextBoundaries.FindPrefix(budget, markdown.AsSpan(start, remaining), budget.Limit, cancellationToken);
-                if (sliceLen <= 0)
-                {
-                    sliceLen = Math.Min(remaining, budget.PrefixIndex(markdown.AsSpan(start, remaining), budget.Limit));
-                    if (sliceLen <= 0)
-                    {
-                        sliceLen = 1;
-                    }
-                }
+                int sliceLen = TextBoundaries.ForcedPrefix(budget, markdown.AsSpan(start, remaining), budget.Limit, cancellationToken);
 
                 chunks.Add(new TableChunk(markdown[start..(start + sliceLen)], part++, part > 1, 0, 0));
                 start += sliceLen;
@@ -61,7 +54,7 @@ internal sealed class TableSplitter(TokenBudget budget)
 
         if (table.RowCount == 0)
         {
-            chunks.Add(new TableChunk(headerText, 0, false, 0, 0));
+            chunks.Add(new TableChunk(WithoutFinalLineBreak(headerText), 0, false, 0, 0));
             return chunks;
         }
 
@@ -70,67 +63,64 @@ internal sealed class TableSplitter(TokenBudget budget)
         buffer.Append(headerText);
         int headerLength = buffer.Length;
         int partIndex = 0;
-        int startRowIndex = 1;
-        int lastRowIndex = 0;
-
-        for (int i = 0; i < rows.Count; i++)
+        int first = 0;
+        while (first < rows.Count)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            Range range = rows[i];
-            int rowStart = range.Start.Value;
-            int rowLength = range.End.Value - rowStart;
-
-            int beforeRowLength = buffer.Length;
-            buffer.Append(markdown.AsSpan(rowStart, rowLength));
-            if (buffer.Span[^1] != '\n')
+            int start = rows[first].Start.Value;
+            int rowBudget = budget.Limit - headerTokens;
+            int reach = rowBudget > 0 ? start + budget.PrefixIndex(markdown.AsSpan(start, table.End - start), rowBudget) : start;
+            int estimate = 0;
+            while (first + estimate < rows.Count && rows[first + estimate].End.Value <= reach)
             {
-                buffer.Append("\n");
+                estimate++;
             }
 
-            if (budget.Count(buffer.Span) <= budget.Limit)
+            int window = first;
+            int fit = FitSearch.Count(rows.Count - first, estimate, count =>
             {
-                lastRowIndex = i + 1;
+                FillRows(buffer, headerLength, markdown, rows, window, count);
+                return budget.Count(buffer.Span) <= budget.Limit;
+            });
+
+            if (fit == 0)
+            {
+                // A single row exceeds the budget even beside the header: isolate and slice it.
+                buffer.Length = headerLength;
+                Range row = rows[first];
+                SliceOversizedRow(chunks, headerText, headerTokens, markdown, row.Start.Value,
+                    row.End.Value - row.Start.Value, ref partIndex, first + 1, cancellationToken);
+                first++;
                 continue;
             }
 
-            // Row exceeded budget when appended
-            if (beforeRowLength > headerLength)
-            {
-                buffer.Length = beforeRowLength;
-                chunks.Add(new TableChunk(buffer.ToString(), partIndex, partIndex > 0, startRowIndex, lastRowIndex));
-                partIndex++;
-
-                buffer.Length = headerLength;
-                startRowIndex = i + 1;
-                buffer.Append(markdown.AsSpan(rowStart, rowLength));
-                if (buffer.Span[^1] != '\n')
-                {
-                    buffer.Append("\n");
-                }
-
-                if (budget.Count(buffer.Span) <= budget.Limit)
-                {
-                    lastRowIndex = i + 1;
-                    continue;
-                }
-            }
-
-            // Single row exceeds budget even when alone with header: isolate and slice it gracefully
-            buffer.Length = headerLength;
-            SliceOversizedRow(chunks, headerText, headerTokens, markdown, rowStart, rowLength, ref partIndex, i + 1, cancellationToken);
-
-            startRowIndex = i + 2;
-            lastRowIndex = i + 1;
-        }
-
-        if (buffer.Length > headerLength)
-        {
-            chunks.Add(new TableChunk(buffer.ToString(), partIndex, partIndex > 0, startRowIndex, rows.Count));
+            FillRows(buffer, headerLength, markdown, rows, first, fit);
+            chunks.Add(new TableChunk(WithoutFinalLineBreak(buffer.Span), partIndex, partIndex > 0, first + 1, first + fit));
+            partIndex++;
+            first += fit;
         }
 
         return chunks;
     }
 
+    /// <summary>Resets the buffer to the header and appends <paramref name="count"/> rows, each ending a line.</summary>
+    private static void FillRows(PooledText buffer, int headerLength, string markdown, IReadOnlyList<Range> rows,
+        int first, int count)
+    {
+        buffer.Length = headerLength;
+        for (int i = first; i < first + count; i++)
+        {
+            buffer.Append(markdown.AsSpan(rows[i]));
+            if (buffer.Span[^1] != '\n')
+            {
+                buffer.Append("\n");
+            }
+        }
+    }
+
+    private static string WithoutFinalLineBreak(ReadOnlySpan<char> text) => text.TrimEnd("\r\n").ToString();
+
+    /// <summary>Creates the chunk for one table part, with the table metadata every chunker emits.</summary>
     internal static IngestionChunk<string> CreateChunk(
         TableChunk chunk,
         IngestionDocument document,
@@ -138,10 +128,10 @@ internal sealed class TableSplitter(TokenBudget budget)
     {
         ArgumentNullException.ThrowIfNull(document);
         IngestionChunk<string> ingestionChunk = new(chunk.Content, document, context);
-        ingestionChunk.Metadata["IsTablePart"] = true;
-        ingestionChunk.Metadata["IsTableContinuation"] = chunk.IsContinuation;
-        ingestionChunk.Metadata["TablePartIndex"] = chunk.PartIndex;
-        ingestionChunk.Metadata["TableRowRange"] = chunk.StartRow > 0 ? $"{chunk.StartRow}-{chunk.EndRow}" : "0-0";
+        ingestionChunk.Metadata[ChunkMetadataKeys.IsTablePart] = true;
+        ingestionChunk.Metadata[ChunkMetadataKeys.IsTableContinuation] = chunk.IsContinuation;
+        ingestionChunk.Metadata[ChunkMetadataKeys.TablePartIndex] = chunk.PartIndex;
+        ingestionChunk.Metadata[ChunkMetadataKeys.TableRowRange] = chunk.StartRow > 0 ? $"{chunk.StartRow}-{chunk.EndRow}" : "0-0";
         return ingestionChunk;
     }
 
@@ -175,15 +165,7 @@ internal sealed class TableSplitter(TokenBudget budget)
         while (remainingLength > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            int len = TextBoundaries.FindPrefix(budget, markdown.AsSpan(currentStart, remainingLength), budget.Limit, cancellationToken);
-            if (len <= 0)
-            {
-                len = Math.Min(remainingLength, budget.PrefixIndex(markdown.AsSpan(currentStart, remainingLength), budget.Limit));
-                if (len <= 0)
-                {
-                    len = 1;
-                }
-            }
+            int len = TextBoundaries.ForcedPrefix(budget, markdown.AsSpan(currentStart, remainingLength), budget.Limit, cancellationToken);
 
             chunks.Add(new TableChunk(markdown[currentStart..(currentStart + len)], partIndex, partIndex > 0, rowNumber, rowNumber));
             partIndex++;

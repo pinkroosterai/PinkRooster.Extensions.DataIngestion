@@ -76,7 +76,7 @@ public sealed class RecursiveTokenChunkerTests
         chunks.Select(c => c.Content).Should().Equal(
             "parent body", "child body", "parent again", "temporary body", "next body", "no heading");
         chunks.Select(c => c.Context).Should().Equal(
-            "# Parent", "# Parent > ## Child", "# Parent", "# Parent > Temporary", "# Next", null);
+            "Parent", "Parent > Child", "Parent", "Parent > Temporary", "Next", null);
         chunks.All(c => ReferenceEquals(c.Document, document)).Should().BeTrue();
         (await ReadAsync(chunker, document)).Select(c => (c.Content, c.Context))
             .Should().Equal(chunks.Select(c => (c.Content, c.Context)));

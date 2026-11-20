@@ -53,6 +53,28 @@ internal static class TextBoundaries
         return best;
     }
 
+    /// <summary>
+    /// Returns the longest prefix that fits <paramref name="limit"/>, or, when not even the first scalar fits, that
+    /// first scalar alone, so callers always advance without splitting a surrogate pair.
+    /// </summary>
+    internal static int ForcedPrefix(
+        TokenBudget budget, ReadOnlySpan<char> text, int limit, CancellationToken cancellationToken)
+    {
+        int length = FindPrefix(budget, text, limit, cancellationToken);
+        if (length > 0)
+        {
+            return length;
+        }
+
+        int prefix = Math.Min(text.Length, budget.PrefixIndex(text, limit));
+        while (prefix > 0 && !IsScalarBoundary(text, prefix))
+        {
+            prefix--;
+        }
+
+        return prefix > 0 ? prefix : Math.Min(text.Length, NextScalar(text, 0));
+    }
+
     internal static InvalidOperationException NoFit(string element, int limit) =>
         new($"Cannot split {element} into nonblank chunks within the effective token budget of {limit}.");
 }

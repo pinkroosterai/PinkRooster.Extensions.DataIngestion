@@ -9,4 +9,6 @@ dotnet build PinkRooster.Extensions.DataIngestion.slnx -c Release
 dotnet test --solution PinkRooster.Extensions.DataIngestion.slnx -c Release
 ```
 
+One test calls a live provider and is skipped unless you opt in: set `PINKROOSTER_RUN_LIVE_CACHE_TEST=1`, `OPENAI_API_KEY`, and `PINKROOSTER_LIVE_CACHE_MODEL` (the model to call) to run `ContextualLiveCacheTests`. It sends requests to the provider and may incur cost.
+
 Warnings are errors; in `src` that includes a public member without an XML doc. The public API of each package is listed in `tests/PinkRooster.Extensions.DataIngestion.Repository.Tests/PublicApi/` and a test compares it: after a change to the public API, run the tests once with `PINKROOSTER_UPDATE_PUBLIC_API=1` and commit the changed files. Use a Conventional Commit subject such as `fix: handle an empty name`. In a pull request, explain the behavior change, list the checks run, and link a related issue when there is one. Security issues belong in the private reporting channel described in [SECURITY.md](SECURITY.md).

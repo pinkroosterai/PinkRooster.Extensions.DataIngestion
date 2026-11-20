@@ -4,16 +4,12 @@ namespace PinkRooster.Extensions.DataIngestion.Chunkers;
 internal readonly record struct MarkdownTable(
     int Start,
     int HeaderStart,
-    int HeaderEnd,
-    int DelimiterStart,
     int DelimiterEnd,
     int RowsStart,
     int End,
     int ColumnCount,
     int RowCount)
 {
-    internal bool IsHeaderOnly => RowCount == 0;
-
     /// <summary>Scans text for GFM-compliant pipe tables outside of code fences.</summary>
     internal static IEnumerable<MarkdownTable> Find(string text, CancellationToken cancellationToken)
     {
@@ -47,7 +43,7 @@ internal readonly record struct MarkdownTable(
             ReadOnlySpan<char> line1 = text.AsSpan(start, line1End - start).Trim();
 
             // A table header must contain at least one pipe and not be a fence or heading
-            if (!line1.Contains('|') || line1.StartsWith('#') || line1.StartsWith('`') || line1.StartsWith('~'))
+            if (!IsTableLine(line1))
             {
                 start = line1End;
                 continue;
@@ -88,8 +84,7 @@ internal readonly record struct MarkdownTable(
                 ReadOnlySpan<char> rowLine = text.AsSpan(current, rowEnd - current);
                 ReadOnlySpan<char> trimmedRow = rowLine.Trim();
 
-                if (trimmedRow.IsEmpty || !trimmedRow.Contains('|') || trimmedRow.StartsWith('#') ||
-                    trimmedRow.StartsWith('`') || trimmedRow.StartsWith('~'))
+                if (!IsTableLine(trimmedRow))
                 {
                     break;
                 }
@@ -99,11 +94,17 @@ internal readonly record struct MarkdownTable(
             }
 
             int tableEnd = current;
-            yield return new MarkdownTable(start, start, line1End, line1End, line2End, rowsStart, tableEnd, colCount, rowCount);
+            yield return new MarkdownTable(start, start, line2End, rowsStart, tableEnd, colCount, rowCount);
 
             start = tableEnd;
         }
     }
+
+    /// <summary>
+    /// Whether a trimmed line can belong to a pipe table: it holds a pipe and does not open a heading or a fence.
+    /// </summary>
+    private static bool IsTableLine(ReadOnlySpan<char> trimmed) =>
+        trimmed.Contains('|') && !trimmed.StartsWith('#') && !trimmed.StartsWith('`') && !trimmed.StartsWith('~');
 
     /// <summary>Returns the slice ranges of all data rows within this table.</summary>
     internal IReadOnlyList<Range> GetRowRanges(string text)

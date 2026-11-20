@@ -32,9 +32,19 @@ jobs:
           --coverage-output-format cobertura --coverage-output core.cobertura.xml
       - name: Enforce core line coverage
         run: python3 tests/check-core-coverage.py artifacts/coverage
+      - name: Collect CodeAnalysis line coverage
+        run: >
+          dotnet test --project tests/PinkRooster.Extensions.DataIngestion.CodeAnalysis.Tests/PinkRooster.Extensions.DataIngestion.CodeAnalysis.Tests.csproj
+          --no-build --results-directory artifacts/coverage-codeanalysis --
+          --coverage --coverage-settings tests/coverage-codeanalysis.runsettings
+          --coverage-output-format cobertura --coverage-output codeanalysis.cobertura.xml
+      - name: Report CodeAnalysis line coverage
+        run: python3 tests/report-coverage.py artifacts/coverage-codeanalysis codeanalysis.cobertura.xml
       - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         if: always()
         with:
           name: core-coverage
-          path: artifacts/coverage/**/core.cobertura.xml
+          path: |
+            artifacts/coverage/**/core.cobertura.xml
+            artifacts/coverage-codeanalysis/**/codeanalysis.cobertura.xml
           if-no-files-found: error

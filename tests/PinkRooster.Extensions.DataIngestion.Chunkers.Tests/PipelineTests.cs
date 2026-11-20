@@ -27,7 +27,7 @@ public sealed class PipelineTests
             direct.Should().HaveCountGreaterThan(1);
             registered.Select(chunk => (chunk.Content, chunk.Context)).Should()
                 .Equal(direct.Select(chunk => (chunk.Content, chunk.Context)));
-            registered.Select(chunk => chunk.Context).Should().OnlyContain(context => context == "# Dispatch");
+            registered.Select(chunk => chunk.Context).Should().OnlyContain(context => context == "Dispatch");
             AssertBudget(registered, 5);
         }
         finally
@@ -103,8 +103,8 @@ public sealed class PipelineTests
         using var client = ContextualChunkProcessorTests.Reply("unused");
         Action missingServices = () => DataIngestionChunkerServiceCollectionExtensions
             .AddContextualChunkProcessor(null!, ContextualChunkProcessorTests.Options(client));
-        Action missingOptions = () => new ServiceCollection().AddContextualChunkProcessor((ContextualChunkerOptions)null!);
-        Action missingFactory = () => new ServiceCollection().AddContextualChunkProcessor((Func<IServiceProvider, ContextualChunkerOptions>)null!);
+        Action missingOptions = () => new ServiceCollection().AddContextualChunkProcessor((ContextualChunkProcessorOptions)null!);
+        Action missingFactory = () => new ServiceCollection().AddContextualChunkProcessor((Func<IServiceProvider, ContextualChunkProcessorOptions>)null!);
 
         missingServices.Should().Throw<ArgumentNullException>().WithParameterName("services");
         missingOptions.Should().Throw<ArgumentNullException>().WithParameterName("options");

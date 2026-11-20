@@ -4,6 +4,8 @@ namespace PinkRooster.Extensions.DataIngestion.CodeAnalysis;
 
 internal static class CSharpSourceBlocks
 {
+    private const string FenceWhitespace = " \t\r\n";
+
     internal static IEnumerable<string> Read(IngestionDocumentSection section, CancellationToken cancellationToken)
     {
         foreach (IngestionDocumentElement element in section.Elements)
@@ -49,14 +51,15 @@ internal static class CSharpSourceBlocks
             cancellationToken.ThrowIfCancellationRequested();
             int end = text.IndexOf('\n', cursor);
             int next = end < 0 ? text.Length : end + 1;
-            ReadOnlySpan<char> line = text.AsSpan(cursor, next - cursor).TrimEnd();
+            // CommonMark allows only spaces and tabs around fence markers, as MarkdownFence in the Chunkers package does.
+            ReadOnlySpan<char> line = text.AsSpan(cursor, next - cursor).TrimEnd(FenceWhitespace);
             int indentation = line.Length - line.TrimStart(' ').Length;
             line = line[indentation..];
             if (indentation <= 3 && !line.IsEmpty && line[0] is '`' or '~')
             {
                 char marker = line[0];
                 int length = line.Length - line.TrimStart(marker).Length;
-                ReadOnlySpan<char> rest = line[length..].Trim();
+                ReadOnlySpan<char> rest = line[length..].Trim(FenceWhitespace);
                 if (openLength == 0 && length >= 3 && (marker != '`' || !rest.Contains('`')))
                 {
                     openMarker = marker;

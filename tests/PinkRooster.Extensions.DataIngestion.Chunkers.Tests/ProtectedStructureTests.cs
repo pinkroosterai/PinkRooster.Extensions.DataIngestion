@@ -47,7 +47,7 @@ public sealed class ProtectedStructureTests
     }
 
     [Fact]
-    public async Task ATooLargeLaterRowFallsBackWithoutDuplicatingAlreadyFittingRows()
+    public async Task ATooLargeLaterRowIsSlicedWithoutDuplicatingAlreadyFittingRows()
     {
         const string Header = "| A |\n| --- |\n";
         string longCell = string.Join(" ", Enumerable.Repeat("oversized", 30));
@@ -58,8 +58,12 @@ public sealed class ProtectedStructureTests
         var chunks = await ReadAsync(NewChunker(limit), Document(table));
 
         chunks.Count.Should().BeGreaterThan(1);
-        string.Concat(chunks.Select(c => c.Content)).Should().Be(markdown);
+        chunks.Count(c => c.Content.Contains("| short |", StringComparison.Ordinal)).Should().Be(1);
+        string rowText = string.Concat(chunks.Select(c => c.Content.Replace(Header, "", StringComparison.Ordinal)))
+            .Replace("| short |", "", StringComparison.Ordinal);
+        rowText.Count(ch => ch == 'o').Should().Be(("| " + longCell + " |").Count(ch => ch == 'o'));
         AssertBudget(chunks, limit);
+        chunks.Select(c => (string)c.Metadata[ChunkMetadataKeys.TableRowRange]).Should().Contain(["1-1", "2-2"]);
     }
 
     [Fact]

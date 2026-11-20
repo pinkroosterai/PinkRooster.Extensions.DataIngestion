@@ -1,64 +1,79 @@
 # Public API for PinkRooster.Extensions.DataIngestion.Chunkers
-PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkProcessor : Microsoft.Extensions.DataIngestion.IngestionChunkProcessor`1[System.String]
-  ctor(PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkerOptions options)
-  method System.Collections.Generic.IAsyncEnumerable`1[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String]] ProcessAsync(System.Collections.Generic.IAsyncEnumerable`1[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String]] chunks, System.Threading.CancellationToken cancellationToken = null)
-PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkerOptions : Microsoft.Extensions.DataIngestion.EnricherOptions
+static class PinkRooster.Extensions.DataIngestion.Chunkers.ChunkMetadataKeys : System.Object
+  const System.String ChildCount = child_count
+  const System.String ChildIndex = child_index
+  const System.String ChildRole = child
+  const System.String ChunkId = chunk_id
+  const System.String ChunkRole = chunk_role
+  const System.String ConditionalSymbols = conditional_symbols
+  const System.String ContextualHeader = contextual_header
+  const System.String IsTableContinuation = is_table_continuation
+  const System.String IsTablePart = is_table_part
+  const System.String ParentId = parent_id
+  const System.String ParentRole = parent
+  const System.String ParentTokenCount = parent_token_count
+  const System.String TablePartIndex = table_part_index
+  const System.String TableRowRange = table_row_range
+sealed class PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkProcessor : Microsoft.Extensions.DataIngestion.IngestionChunkProcessor`1[System.String]
+  const System.String ActivitySourceName = PinkRooster.Extensions.DataIngestion.Chunkers
+  ctor(PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkProcessorOptions options)
+  method override System.Collections.Generic.IAsyncEnumerable`1[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String]] ProcessAsync(System.Collections.Generic.IAsyncEnumerable`1[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String]] chunks, System.Threading.CancellationToken cancellationToken = default)
+sealed class PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkProcessorOptions : Microsoft.Extensions.DataIngestion.EnricherOptions
   ctor(Microsoft.Extensions.AI.IChatClient chatClient, Microsoft.ML.Tokenizers.Tokenizer chatTokenizer)
   property Microsoft.ML.Tokenizers.Tokenizer ChatTokenizer { get; }
-  property Microsoft.ML.Tokenizers.Tokenizer EmbeddingTokenizer { get; set; }
+  property Microsoft.ML.Tokenizers.Tokenizer? EmbeddingTokenizer { get; set; }
   property PinkRooster.Extensions.DataIngestion.Chunkers.ContextualFailureMode FailureMode { get; set; }
-  property System.Action`2[System.Collections.Generic.IList`1[Microsoft.Extensions.AI.ChatMessage],Microsoft.Extensions.AI.ChatOptions] ConfigureCacheControl { get; set; }
-  property System.Func`2[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String],System.Boolean] ChunkFilter { get; set; }
+  property System.Action`2[System.Collections.Generic.IList`1[Microsoft.Extensions.AI.ChatMessage],Microsoft.Extensions.AI.ChatOptions]? ConfigureCacheControl { get; set; }
+  property System.Func`2[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String],System.Boolean]? ChunkFilter { get; set; }
   property System.Int32 BucketOverlapTokens { get; set; }
   property System.Int32 MaxDegreeOfParallelism { get; set; }
   property System.Int32 MaxDocumentContextTokens { get; set; }
   property System.Nullable`1[System.Int32] MaxEnrichedTokens { get; set; }
-PinkRooster.Extensions.DataIngestion.Chunkers.ContextualFailureMode : System.Enum
+enum PinkRooster.Extensions.DataIngestion.Chunkers.ContextualFailureMode : System.Enum
   const PinkRooster.Extensions.DataIngestion.Chunkers.ContextualFailureMode FallbackToOriginalChunk = 0
   const PinkRooster.Extensions.DataIngestion.Chunkers.ContextualFailureMode Throw = 1
   field System.Int32 value__
-PinkRooster.Extensions.DataIngestion.Chunkers.DataIngestionChunkerServiceCollectionExtensions : System.Object
-  method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddContextualChunkProcessor(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkerOptions options)
-  method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddContextualChunkProcessor(Microsoft.Extensions.DependencyInjection.IServiceCollection services, System.Func`2[System.IServiceProvider,PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkerOptions] optionsFactory)
+static class PinkRooster.Extensions.DataIngestion.Chunkers.DataIngestionChunkerServiceCollectionExtensions : System.Object
+  method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddContextualChunkProcessor(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkProcessorOptions options)
+  method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddContextualChunkProcessor(Microsoft.Extensions.DependencyInjection.IServiceCollection services, System.Func`2[System.IServiceProvider,PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkProcessorOptions] optionsFactory)
   method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddHierarchicalTokenChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalChunkerOptions options)
   method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddHierarchicalTokenChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, System.Func`2[System.IServiceProvider,PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalChunkerOptions] optionsFactory)
   method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddMarkdownTableChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.Chunkers.TableChunkerOptions options)
   method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddMarkdownTableChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, System.Func`2[System.IServiceProvider,PinkRooster.Extensions.DataIngestion.Chunkers.TableChunkerOptions] optionsFactory)
   method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddRecursiveTokenChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveChunkerOptions options)
   method static Microsoft.Extensions.DependencyInjection.IServiceCollection AddRecursiveTokenChunker(Microsoft.Extensions.DependencyInjection.IServiceCollection services, System.Func`2[System.IServiceProvider,PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveChunkerOptions] optionsFactory)
-PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalChunkerOptions : Microsoft.Extensions.DataIngestion.IngestionChunkerOptions
+sealed class PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalChunkerOptions : Microsoft.Extensions.DataIngestion.IngestionChunkerOptions
   ctor(Microsoft.ML.Tokenizers.Tokenizer tokenizer)
-  method System.Void Validate()
   property PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalEmissionMode EmissionMode { get; set; }
   property System.Int32 ParentMaxTokens { get; set; }
   property System.Int32 ParentOverlapTokens { get; set; }
-PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalEmissionMode : System.Enum
+enum PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalEmissionMode : System.Enum
   const PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalEmissionMode ChildrenOnly = 1
   const PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalEmissionMode Interleaved = 0
   const PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalEmissionMode ParentsOnly = 2
   field System.Int32 value__
-PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalTokenChunker : Microsoft.Extensions.DataIngestion.IngestionChunker`1[System.String]
+sealed class PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalTokenChunker : Microsoft.Extensions.DataIngestion.IngestionChunker`1[System.String]
   ctor(PinkRooster.Extensions.DataIngestion.Chunkers.HierarchicalChunkerOptions options)
-  method System.Collections.Generic.IAsyncEnumerable`1[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String]] ProcessAsync(Microsoft.Extensions.DataIngestion.IngestionDocument document, System.Threading.CancellationToken cancellationToken = null)
-PinkRooster.Extensions.DataIngestion.Chunkers.MarkdownTableChunker : Microsoft.Extensions.DataIngestion.IngestionChunker`1[System.String]
+  method override System.Collections.Generic.IAsyncEnumerable`1[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String]] ProcessAsync(Microsoft.Extensions.DataIngestion.IngestionDocument document, System.Threading.CancellationToken cancellationToken = default)
+sealed class PinkRooster.Extensions.DataIngestion.Chunkers.MarkdownTableChunker : Microsoft.Extensions.DataIngestion.IngestionChunker`1[System.String]
   ctor(PinkRooster.Extensions.DataIngestion.Chunkers.TableChunkerOptions options)
-  method System.Collections.Generic.IAsyncEnumerable`1[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String]] ProcessAsync(Microsoft.Extensions.DataIngestion.IngestionDocument document, System.Threading.CancellationToken cancellationToken = null)
-PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveChunkerOptions : Microsoft.Extensions.DataIngestion.IngestionChunkerOptions
+  method override System.Collections.Generic.IAsyncEnumerable`1[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String]] ProcessAsync(Microsoft.Extensions.DataIngestion.IngestionDocument document, System.Threading.CancellationToken cancellationToken = default)
+sealed class PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveChunkerOptions : Microsoft.Extensions.DataIngestion.IngestionChunkerOptions
   ctor(Microsoft.ML.Tokenizers.Tokenizer tokenizer)
   property PinkRooster.Extensions.DataIngestion.Chunkers.SeparatorPlacement KeepSeparator { get; set; }
   property System.Boolean PreserveAtomicElements { get; set; }
   property System.Boolean RepeatTableHeaders { get; set; }
   property System.Collections.Generic.IReadOnlyList`1[System.String] Separators { get; set; }
   property System.Int32 ReservedHeaderTokens { get; set; }
-PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveTokenChunker : Microsoft.Extensions.DataIngestion.IngestionChunker`1[System.String]
+sealed class PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveTokenChunker : Microsoft.Extensions.DataIngestion.IngestionChunker`1[System.String]
   ctor(PinkRooster.Extensions.DataIngestion.Chunkers.RecursiveChunkerOptions options)
-  method System.Collections.Generic.IAsyncEnumerable`1[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String]] ProcessAsync(Microsoft.Extensions.DataIngestion.IngestionDocument document, System.Threading.CancellationToken cancellationToken = null)
-PinkRooster.Extensions.DataIngestion.Chunkers.SeparatorPlacement : System.Enum
+  method override System.Collections.Generic.IAsyncEnumerable`1[Microsoft.Extensions.DataIngestion.IngestionChunk`1[System.String]] ProcessAsync(Microsoft.Extensions.DataIngestion.IngestionDocument document, System.Threading.CancellationToken cancellationToken = default)
+enum PinkRooster.Extensions.DataIngestion.Chunkers.SeparatorPlacement : System.Enum
   const PinkRooster.Extensions.DataIngestion.Chunkers.SeparatorPlacement Leading = 1
   const PinkRooster.Extensions.DataIngestion.Chunkers.SeparatorPlacement None = 0
   const PinkRooster.Extensions.DataIngestion.Chunkers.SeparatorPlacement Trailing = 2
   field System.Int32 value__
-PinkRooster.Extensions.DataIngestion.Chunkers.TableChunkerOptions : Microsoft.Extensions.DataIngestion.IngestionChunkerOptions
+sealed class PinkRooster.Extensions.DataIngestion.Chunkers.TableChunkerOptions : Microsoft.Extensions.DataIngestion.IngestionChunkerOptions
   ctor(Microsoft.ML.Tokenizers.Tokenizer tokenizer)
   property System.Boolean EmitNonTableContent { get; set; }
   property System.Int32 ReservedHeaderTokens { get; set; }

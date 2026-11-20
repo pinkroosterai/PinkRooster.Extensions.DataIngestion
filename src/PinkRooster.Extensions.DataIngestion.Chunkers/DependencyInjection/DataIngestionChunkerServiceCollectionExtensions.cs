@@ -83,7 +83,7 @@ public static class DataIngestionChunkerServiceCollectionExtensions
     /// <param name="options">The options used to construct and configure the processor.</param>
     /// <returns>The service collection for chaining registrations.</returns>
     public static IServiceCollection AddContextualChunkProcessor(
-        this IServiceCollection services, ContextualChunkerOptions options)
+        this IServiceCollection services, ContextualChunkProcessorOptions options)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
@@ -95,7 +95,7 @@ public static class DataIngestionChunkerServiceCollectionExtensions
     /// <param name="optionsFactory">Factory producing the processor configuration from service provider.</param>
     /// <returns>The service collection for chaining registrations.</returns>
     public static IServiceCollection AddContextualChunkProcessor(
-        this IServiceCollection services, Func<IServiceProvider, ContextualChunkerOptions> optionsFactory)
+        this IServiceCollection services, Func<IServiceProvider, ContextualChunkProcessorOptions> optionsFactory)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(optionsFactory);
