@@ -120,6 +120,50 @@ internal sealed class DirectiveContext
         return output.Append(_source.AsSpan(cursor, span.End - cursor)).ToString();
     }
 
+    internal TextSpan MapToSourceSpan(TextSpan sliceSpan, TextSpan bounded)
+    {
+        if (_regions.Count == 0)
+        {
+            return new TextSpan(sliceSpan.Start + bounded.Start, bounded.Length);
+        }
+
+        int sourceStart = MapOffset(sliceSpan, bounded.Start);
+        int sourceEnd = MapOffset(sliceSpan, bounded.End);
+        return TextSpan.FromBounds(sourceStart, Math.Max(sourceStart, sourceEnd));
+    }
+
+    private int MapOffset(TextSpan sliceSpan, int contentOffset)
+    {
+        int sourcePos = sliceSpan.Start;
+        int remaining = contentOffset;
+        foreach (Region region in _regions)
+        {
+            if (region.Span.Start >= sliceSpan.End)
+            {
+                break;
+            }
+
+            if (region.Span.End <= sliceSpan.Start || (sliceSpan.Contains(region.Span) &&
+                region.Partner is { } partner && sliceSpan.Contains(partner)))
+            {
+                continue;
+            }
+
+            int strippedStart = Math.Max(sliceSpan.Start, region.Span.Start);
+            int strippedEnd = Math.Min(sliceSpan.End, region.Span.End);
+            int preservedLength = strippedStart - sourcePos;
+            if (remaining < preservedLength)
+            {
+                return sourcePos + remaining;
+            }
+
+            remaining -= preservedLength;
+            sourcePos = strippedEnd;
+        }
+
+        return sourcePos + remaining;
+    }
+
     private static string[] Names(ExpressionSyntax expression) =>
         expression.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>()
             .Select(name => name.Identifier.ValueText).ToArray();

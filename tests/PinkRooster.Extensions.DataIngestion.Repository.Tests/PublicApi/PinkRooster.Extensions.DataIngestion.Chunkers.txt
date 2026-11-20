@@ -7,11 +7,17 @@ static class PinkRooster.Extensions.DataIngestion.Chunkers.ChunkMetadataKeys : S
   const System.String ChunkRole = chunk_role
   const System.String ConditionalSymbols = conditional_symbols
   const System.String ContextualHeader = contextual_header
+  const System.String EndColumn = end_column
+  const System.String EndLine = end_line
+  const System.String FilePath = file_path
   const System.String IsTableContinuation = is_table_continuation
   const System.String IsTablePart = is_table_part
+  const System.String LineRange = line_range
   const System.String ParentId = parent_id
   const System.String ParentRole = parent
   const System.String ParentTokenCount = parent_token_count
+  const System.String StartColumn = start_column
+  const System.String StartLine = start_line
   const System.String TablePartIndex = table_part_index
   const System.String TableRowRange = table_row_range
 sealed class PinkRooster.Extensions.DataIngestion.Chunkers.ContextualChunkProcessor : Microsoft.Extensions.DataIngestion.IngestionChunkProcessor`1[System.String]

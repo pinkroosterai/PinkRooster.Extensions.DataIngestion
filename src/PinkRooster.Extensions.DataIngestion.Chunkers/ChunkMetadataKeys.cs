@@ -52,4 +52,34 @@ public static class ChunkMetadataKeys
     /// Key whose value lists the preprocessor symbols under which a C# chunk is active, written by the Roslyn chunker.
     /// </summary>
     public const string ConditionalSymbols = "conditional_symbols";
+
+    /// <summary>
+    /// Key whose <see cref="string"/> value is the file path or document identifier of the chunk's source.
+    /// </summary>
+    public const string FilePath = "file_path";
+
+    /// <summary>
+    /// Key whose <see cref="int"/> value is the 1-based start line of the chunk in its source document.
+    /// </summary>
+    public const string StartLine = "start_line";
+
+    /// <summary>
+    /// Key whose <see cref="int"/> value is the 1-based end line of the chunk in its source document.
+    /// </summary>
+    public const string EndLine = "end_line";
+
+    /// <summary>
+    /// Key whose <see cref="string"/> value is the formatted 1-based line span of the chunk, such as <c>42-65</c>.
+    /// </summary>
+    public const string LineRange = "line_range";
+
+    /// <summary>
+    /// Key whose <see cref="int"/> value is the 1-based character column where the chunk begins.
+    /// </summary>
+    public const string StartColumn = "start_column";
+
+    /// <summary>
+    /// Key whose <see cref="int"/> value is the 1-based character column where the chunk ends.
+    /// </summary>
+    public const string EndColumn = "end_column";
 }

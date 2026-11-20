@@ -44,11 +44,14 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
         ArgumentNullException.ThrowIfNull(document);
         cancellationToken.ThrowIfCancellationRequested();
         await Task.CompletedTask.ConfigureAwait(false);
+        string? filePath = string.IsNullOrWhiteSpace(document.Identifier) ? null : document.Identifier;
         foreach (IngestionDocumentSection section in document.Sections)
         {
-            foreach (string source in CSharpSourceBlocks.Read(section, cancellationToken))
+            foreach (SourceBlock block in CSharpSourceBlocks.Read(section, cancellationToken))
             {
-                CompilationUnitSyntax root = CSharpSyntaxTree.ParseText(source, _parseOptions, cancellationToken: cancellationToken)
+                string source = block.Source;
+                int fenceLineOffset = block.LineOffset;
+                CompilationUnitSyntax root = CSharpSyntaxTree.ParseText(source, _parseOptions, path: filePath ?? string.Empty, cancellationToken: cancellationToken)
                     .GetCompilationUnitRoot(cancellationToken);
                 DirectiveContext directives = new DirectiveContext(root, source, cancellationToken);
                 CodeScope scope = new CodeScope(null, null, null).WithUsings(root.Usings, _includeUsings);
@@ -71,9 +74,42 @@ public sealed class RoslynCodeChunker : IngestionChunker<string>
                             continue;
                         }
 
+                        TextSpan sourceSpan = _stripRegions
+                            ? directives.MapToSourceSpan(slice.Span, bounded)
+                            : new TextSpan(slice.Span.Start + bounded.Start, bounded.Length);
+
+                        FileLinePositionSpan lineSpan = root.SyntaxTree.GetLineSpan(sourceSpan, cancellationToken);
+                        int startLine = lineSpan.StartLinePosition.Line + 1 + fenceLineOffset;
+                        int startColumn = lineSpan.StartLinePosition.Character + 1;
+                        int endLine;
+                        int endColumn;
+                        if (lineSpan.EndLinePosition.Character == 0 && lineSpan.EndLinePosition.Line > lineSpan.StartLinePosition.Line && sourceSpan.Length > 0)
+                        {
+                            FileLinePositionSpan lastCharSpan = root.SyntaxTree.GetLineSpan(new TextSpan(sourceSpan.End - 1, 1), cancellationToken);
+                            endLine = lastCharSpan.StartLinePosition.Line + 1 + fenceLineOffset;
+                            endColumn = lastCharSpan.StartLinePosition.Character + 1;
+                        }
+                        else
+                        {
+                            endLine = lineSpan.EndLinePosition.Line + 1 + fenceLineOffset;
+                            endColumn = lineSpan.EndLinePosition.Character + 1;
+                        }
+
                         IngestionChunk<string> chunk = new IngestionChunk<string>(
                             bounded.Length == content.Length ? content : content.Substring(bounded.Start, bounded.Length),
                             document, slice.Context);
+
+                        if (filePath is not null)
+                        {
+                            chunk.Metadata[ChunkMetadataKeys.FilePath] = filePath;
+                        }
+
+                        chunk.Metadata[ChunkMetadataKeys.StartLine] = startLine;
+                        chunk.Metadata[ChunkMetadataKeys.EndLine] = endLine;
+                        chunk.Metadata[ChunkMetadataKeys.LineRange] = $"{startLine}-{endLine}";
+                        chunk.Metadata[ChunkMetadataKeys.StartColumn] = startColumn;
+                        chunk.Metadata[ChunkMetadataKeys.EndColumn] = endColumn;
+
                         if (symbols.Length > 0)
                         {
                             chunk.Metadata[ChunkMetadataKeys.ConditionalSymbols] = symbols;

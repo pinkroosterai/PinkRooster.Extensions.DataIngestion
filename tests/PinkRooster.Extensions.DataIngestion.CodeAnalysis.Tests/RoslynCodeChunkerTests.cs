@@ -229,6 +229,190 @@ public sealed class RoslynCodeChunkerTests
         chunks.Should().NotContain(c => c.Content.Trim() == "}" || c.Content.Trim() == "}\n}" || c.Content.Trim().StartsWith("} //"));
     }
 
+    [Fact]
+    public async Task RawCSharpEmitsAccurateLocationCoordinatesAndMetadata()
+    {
+        var token = TestContext.Current.CancellationToken;
+        const string code = """
+            namespace Sample;
+
+            public class Calculator
+            {
+                public int Add(int a, int b)
+                {
+                    return a + b;
+                }
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(code));
+        var document = await new SourceCodeDocumentReader().ReadAsync(stream, "src/Calculator.cs", "text/x-csharp", token);
+        var chunker = new RoslynCodeChunker(Options(20));
+        var chunks = await CollectAsync(chunker, document, token);
+
+        chunks.Should().NotBeEmpty();
+        foreach (var chunk in chunks)
+        {
+            chunk.Metadata.Should().ContainKey(ChunkMetadataKeys.FilePath);
+            chunk.Metadata[ChunkMetadataKeys.FilePath].Should().Be("src/Calculator.cs");
+            chunk.Metadata.Should().ContainKey(ChunkMetadataKeys.StartLine);
+            chunk.Metadata.Should().ContainKey(ChunkMetadataKeys.EndLine);
+            chunk.Metadata.Should().ContainKey(ChunkMetadataKeys.LineRange);
+            chunk.Metadata.Should().ContainKey(ChunkMetadataKeys.StartColumn);
+            chunk.Metadata.Should().ContainKey(ChunkMetadataKeys.EndColumn);
+
+            int startLine = (int)chunk.Metadata[ChunkMetadataKeys.StartLine];
+            int endLine = (int)chunk.Metadata[ChunkMetadataKeys.EndLine];
+            int startCol = (int)chunk.Metadata[ChunkMetadataKeys.StartColumn];
+            int endCol = (int)chunk.Metadata[ChunkMetadataKeys.EndColumn];
+            string lineRange = (string)chunk.Metadata[ChunkMetadataKeys.LineRange];
+
+            startLine.Should().BeGreaterThanOrEqualTo(1);
+            endLine.Should().BeGreaterThanOrEqualTo(startLine);
+            startCol.Should().BeGreaterThanOrEqualTo(1);
+            endCol.Should().BeGreaterThanOrEqualTo(1);
+            lineRange.Should().Be($"{startLine}-{endLine}");
+        }
+
+        var methodChunk = chunks.FirstOrDefault(c => c.Content.Contains("int Add(int a, int b)", StringComparison.Ordinal));
+        methodChunk.Should().NotBeNull();
+        ((int)methodChunk!.Metadata[ChunkMetadataKeys.StartLine]).Should().Be(5);
+        ((int)methodChunk.Metadata[ChunkMetadataKeys.EndLine]).Should().Be(8);
+        ((string)methodChunk.Metadata[ChunkMetadataKeys.LineRange]).Should().Be("5-8");
+    }
+
+    [Fact]
+    public async Task MarkdownFencesEmitDocumentRelativeLineNumbers()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var document = new IngestionDocument("docs/tutorial.md");
+        var section = new IngestionDocumentSection();
+        section.Elements.Add(new IngestionDocumentParagraph("""
+            # Getting Started
+
+            Here is how you declare the model:
+
+            ```csharp
+            public record User(int Id, string Name);
+            ```
+
+            And here is a helper function:
+
+            ```csharp
+            public static class Extensions
+            {
+                public static bool IsAdmin(this User user) => user.Id == 1;
+            }
+            ```
+            """));
+        document.Sections.Add(section);
+        var chunker = new RoslynCodeChunker(Options(100));
+        var chunks = await CollectAsync(chunker, document, token);
+
+        chunks.Should().HaveCount(2);
+
+        var firstChunk = chunks[0];
+        firstChunk.Metadata[ChunkMetadataKeys.FilePath].Should().Be("docs/tutorial.md");
+        ((int)firstChunk.Metadata[ChunkMetadataKeys.StartLine]).Should().Be(6);
+        ((int)firstChunk.Metadata[ChunkMetadataKeys.EndLine]).Should().Be(6);
+        ((string)firstChunk.Metadata[ChunkMetadataKeys.LineRange]).Should().Be("6-6");
+
+        var secondChunk = chunks[1];
+        secondChunk.Metadata[ChunkMetadataKeys.FilePath].Should().Be("docs/tutorial.md");
+        ((int)secondChunk.Metadata[ChunkMetadataKeys.StartLine]).Should().Be(12);
+        ((int)secondChunk.Metadata[ChunkMetadataKeys.EndLine]).Should().Be(15);
+        ((string)secondChunk.Metadata[ChunkMetadataKeys.LineRange]).Should().Be("12-15");
+    }
+
+    [Fact]
+    public async Task OverlappingAndSplitMembersPreserveAccurateLineSpans()
+    {
+        var token = TestContext.Current.CancellationToken;
+        const string code = """
+            public class HeavyService
+            {
+                public void LongMethod()
+                {
+                    int step1 = 1 + 1;
+                    int step2 = 2 + 2;
+                    int step3 = 3 + 3;
+                    int step4 = 4 + 4;
+                    int step5 = 5 + 5;
+                    int step6 = 6 + 6;
+                    int step7 = 7 + 7;
+                    int step8 = 8 + 8;
+                }
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(code));
+        var document = await new SourceCodeDocumentReader().ReadAsync(stream, "Service.cs", "text/x-csharp", token);
+        var chunker = new RoslynCodeChunker(new RoslynChunkerOptions(Tokenizer)
+        {
+            MaxTokensPerChunk = 20,
+            OverlapTokens = 5,
+        });
+        var chunks = await CollectAsync(chunker, document, token);
+
+        chunks.Should().HaveCountGreaterThan(1);
+        int lastStart = 0;
+        foreach (var chunk in chunks)
+        {
+            int start = (int)chunk.Metadata[ChunkMetadataKeys.StartLine];
+            int end = (int)chunk.Metadata[ChunkMetadataKeys.EndLine];
+            start.Should().BeGreaterThanOrEqualTo(lastStart);
+            end.Should().BeGreaterThanOrEqualTo(start);
+            chunk.Metadata[ChunkMetadataKeys.LineRange].Should().Be($"{start}-{end}");
+            lastStart = start;
+        }
+    }
+
+    [Fact]
+    public async Task MissingOrEmptyDocumentIdentifierOmitsFilePathKey()
+    {
+        var token = TestContext.Current.CancellationToken;
+        const string code = "public record Point(int X, int Y);";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(code));
+        var document = await new SourceCodeDocumentReader().ReadAsync(stream, "   ", "text/x-csharp", token);
+
+        var chunker = new RoslynCodeChunker(Options(50));
+        var chunks = await CollectAsync(chunker, document, token);
+
+        chunks.Should().ContainSingle();
+        var chunk = chunks[0];
+        chunk.Metadata.Should().NotContainKey(ChunkMetadataKeys.FilePath);
+        chunk.Metadata.Should().ContainKey(ChunkMetadataKeys.StartLine);
+        chunk.Metadata.Should().ContainKey(ChunkMetadataKeys.EndLine);
+        chunk.Metadata.Should().ContainKey(ChunkMetadataKeys.LineRange);
+        ((int)chunk.Metadata[ChunkMetadataKeys.StartLine]).Should().Be(1);
+        ((int)chunk.Metadata[ChunkMetadataKeys.EndLine]).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task RegionStrippedSourceMaintainsDiskAlignedLineCoordinates()
+    {
+        var token = TestContext.Current.CancellationToken;
+        const string code = """
+            namespace Sample;
+
+            public class Example
+            {
+                #region UnpairedHeader
+                public int Value1 => 1;
+                public int Value2 => 2;
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(code));
+        var document = await new SourceCodeDocumentReader().ReadAsync(stream, "Example.cs", "text/x-csharp", token);
+        var chunker = new RoslynCodeChunker(Options(12));
+        var chunks = await CollectAsync(chunker, document, token);
+
+        var value2Chunk = chunks.FirstOrDefault(c => c.Content.Contains("Value2", StringComparison.Ordinal));
+        value2Chunk.Should().NotBeNull();
+        // In the original file on disk, Value2 is on line 7 even though #region on line 5 was stripped
+        ((int)value2Chunk!.Metadata[ChunkMetadataKeys.StartLine]).Should().Be(7);
+        ((int)value2Chunk.Metadata[ChunkMetadataKeys.EndLine]).Should().Be(7);
+        ((string)value2Chunk.Metadata[ChunkMetadataKeys.LineRange]).Should().Be("7-7");
+    }
+
     private static RoslynChunkerOptions Options(int limit) =>
         new(Tokenizer) { MaxTokensPerChunk = limit, OverlapTokens = 0, IncludeUsingDirectives = true };
 

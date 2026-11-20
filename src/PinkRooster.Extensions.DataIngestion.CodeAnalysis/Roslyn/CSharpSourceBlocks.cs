@@ -2,18 +2,21 @@ using Microsoft.Extensions.DataIngestion;
 
 namespace PinkRooster.Extensions.DataIngestion.CodeAnalysis;
 
+internal readonly record struct SourceBlock(string Source, int LineOffset);
+
 internal static class CSharpSourceBlocks
 {
     private const string FenceWhitespace = " \t\r\n";
 
-    internal static IEnumerable<string> Read(IngestionDocumentSection section, CancellationToken cancellationToken)
+    internal static IEnumerable<SourceBlock> Read(IngestionDocumentSection section, CancellationToken cancellationToken)
     {
+        int lineAccumulator = 0;
         foreach (IngestionDocumentElement element in section.Elements)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (element is IngestionDocumentSection child)
             {
-                foreach (string block in Read(child, cancellationToken))
+                foreach (SourceBlock block in Read(child, cancellationToken))
                 {
                     yield return block;
                 }
@@ -28,21 +31,25 @@ internal static class CSharpSourceBlocks
 
             if (element.HasMetadata && element.Metadata.ContainsKey(SourceCodeDocumentReader.SourceMarker))
             {
-                yield return text;
+                yield return new SourceBlock(text, 0);
                 continue;
             }
 
-            foreach (string block in Fences(text, cancellationToken))
+            foreach (SourceBlock block in Fences(text, lineAccumulator, cancellationToken))
             {
                 yield return block;
             }
+
+            lineAccumulator += CountLines(text);
         }
     }
 
-    private static IEnumerable<string> Fences(string text, CancellationToken cancellationToken)
+    private static IEnumerable<SourceBlock> Fences(string text, int baseLineOffset, CancellationToken cancellationToken)
     {
         int cursor = 0;
+        int currentLine = 1;
         int bodyStart = 0;
+        int bodyStartLine = 1;
         char openMarker = '\0';
         int openLength = 0;
         bool isCSharp = false;
@@ -66,12 +73,13 @@ internal static class CSharpSourceBlocks
                     openLength = length;
                     isCSharp = IsCSharp(rest);
                     bodyStart = next;
+                    bodyStartLine = currentLine + 1;
                 }
                 else if (openLength > 0 && marker == openMarker && length >= openLength && rest.IsEmpty)
                 {
                     if (isCSharp && cursor > bodyStart)
                     {
-                        yield return text[bodyStart..cursor];
+                        yield return new SourceBlock(text[bodyStart..cursor], baseLineOffset + bodyStartLine - 1);
                     }
 
                     openLength = 0;
@@ -79,7 +87,25 @@ internal static class CSharpSourceBlocks
             }
 
             cursor = next;
+            currentLine++;
         }
+    }
+
+    private static int CountLines(string text)
+    {
+        int count = 0;
+        int index = -1;
+        while ((index = text.IndexOf('\n', index + 1)) >= 0)
+        {
+            count++;
+        }
+
+        if (text.Length > 0 && !text.EndsWith('\n'))
+        {
+            count++;
+        }
+
+        return count;
     }
 
     private static bool IsCSharp(ReadOnlySpan<char> info)

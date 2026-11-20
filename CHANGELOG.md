@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [1.0.0-preview.3] - 2026-11-20
+
+### Added
+- Location metadata keys (`file_path`, `start_line`, `end_line`, `line_range`, `start_column`, `end_column`) on `ChunkMetadataKeys`.
+- 1-based source line span and column extraction in `RoslynCodeChunker` using Roslyn AST `SyntaxTree.GetLineSpan`.
+- Document-relative line offset tracking in `CSharpSourceBlocks` for fenced C# blocks embedded within Markdown documents.
+- Disk-aligned source coordinate mapping in `DirectiveContext` across stripped `#region` directives.
+
 ## [1.0.0-preview.2] - 2026-11-20
 
 ### Changed
