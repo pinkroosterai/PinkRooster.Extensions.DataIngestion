@@ -74,6 +74,12 @@ Every key below is a constant on `ChunkMetadataKeys`; read metadata through the 
 | `ParentTokenCount` | `parent_token_count` | `int`, token count of the parent | `HierarchicalTokenChunker` |
 | `ContextualHeader` | `contextual_header` | `string`, the prepended header | `ContextualChunkProcessor` |
 | `ConditionalSymbols` | `conditional_symbols` | `string[]`, active preprocessor symbols | `RoslynCodeChunker` (CodeAnalysis package) |
+| `FilePath` | `file_path` | `string`, file path or document identifier | `RoslynCodeChunker`, `RecursiveTokenChunker` |
+| `StartLine` | `start_line` | `int`, 1-based start line in source document | `RoslynCodeChunker`, `RecursiveTokenChunker` |
+| `EndLine` | `end_line` | `int`, 1-based end line in source document | `RoslynCodeChunker`, `RecursiveTokenChunker` |
+| `LineRange` | `line_range` | `string`, formatted 1-based line span (e.g. `42-65`) | `RoslynCodeChunker`, `RecursiveTokenChunker` |
+| `StartColumn` | `start_column` | `int`, 1-based character column where chunk begins | `RoslynCodeChunker` |
+| `EndColumn` | `end_column` | `int`, 1-based character column where chunk ends | `RoslynCodeChunker` |
 
 ## Telemetry
 

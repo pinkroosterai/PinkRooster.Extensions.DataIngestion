@@ -142,6 +142,10 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
             yield break;
         }
 
+        int? elementStartLine = element.Metadata.TryGetValue(ChunkMetadataKeys.StartLine, out object? sl) && sl is int l
+            ? l
+            : null;
+
         if (_protectedChunker is not null && element is IngestionDocumentTable table)
         {
             foreach (IngestionChunk<string> text in Flush(state, cancellationToken))
@@ -150,10 +154,25 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
             }
 
             cancellationToken.ThrowIfCancellationRequested();
+            int? tableStartLine = elementStartLine;
+            int? tableEndLine = null;
+            if (elementStartLine.HasValue)
+            {
+                int lastIndex = markdown.Length - 1;
+                while (lastIndex >= 0 && (markdown[lastIndex] == '\n' || markdown[lastIndex] == '\r'))
+                {
+                    lastIndex--;
+                }
+
+                tableEndLine = lastIndex >= 0
+                    ? elementStartLine.Value + CountNewlines(markdown.AsSpan(0, lastIndex))
+                    : elementStartLine.Value;
+            }
+
             foreach (TableChunk part in _protectedChunker.Table(table, markdown, _repeatTableHeaders, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                yield return TableSplitter.CreateChunk(part, state.Document, state.Context);
+                yield return TableSplitter.CreateChunk(part, state.Document, state.Context, tableStartLine, tableEndLine);
             }
 
             state.FollowingProse = false;
@@ -164,7 +183,7 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
         int start = 0;
         foreach (ProtectedRegion region in CollectRegions(markdown, cancellationToken))
         {
-            foreach (IngestionChunk<string> chunk in Prose(state, markdown, start, region.Start, elementName, cancellationToken))
+            foreach (IngestionChunk<string> chunk in Prose(state, markdown, start, region.Start, elementName, elementStartLine, cancellationToken))
             {
                 yield return chunk;
             }
@@ -175,7 +194,7 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            foreach (IngestionChunk<string> chunk in EmitRegion(state, markdown, region, cancellationToken))
+            foreach (IngestionChunk<string> chunk in EmitRegion(state, markdown, region, elementStartLine, cancellationToken))
             {
                 yield return chunk;
             }
@@ -186,7 +205,7 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
 
         if (!markdown.AsSpan(start).IsWhiteSpace())
         {
-            foreach (IngestionChunk<string> chunk in Prose(state, markdown, start, markdown.Length, elementName, cancellationToken))
+            foreach (IngestionChunk<string> chunk in Prose(state, markdown, start, markdown.Length, elementName, elementStartLine, cancellationToken))
             {
                 yield return chunk;
             }
@@ -218,52 +237,97 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
     }
 
     private IEnumerable<IngestionChunk<string>> EmitRegion(SectionState state, string markdown, ProtectedRegion region,
-        CancellationToken cancellationToken)
+        int? elementStartLine, CancellationToken cancellationToken)
     {
         ProtectedChunker protectedChunker = _protectedChunker!;
         if (region.Fence is { } fence)
         {
+            int? startLine = null;
+            int? endLine = null;
+            if (elementStartLine.HasValue)
+            {
+                startLine = elementStartLine.Value + CountNewlines(markdown.AsSpan(0, fence.Start));
+                int lastIndex = fence.End - 1;
+                while (lastIndex > fence.Start && (markdown[lastIndex] == '\n' || markdown[lastIndex] == '\r'))
+                {
+                    lastIndex--;
+                }
+
+                endLine = elementStartLine.Value + CountNewlines(markdown.AsSpan(0, lastIndex));
+            }
+
             foreach (string chunk in protectedChunker.Fence(markdown, fence, cancellationToken))
             {
-                yield return new IngestionChunk<string>(chunk, state.Document, state.Context);
+                yield return CreateChunk(chunk, state.Document, state.Context, startLine, endLine);
             }
         }
         else if (region.Table is { } mdTable)
         {
+            IReadOnlyList<Range> rows = mdTable.GetRowRanges(markdown);
+            int? tableStartLine = elementStartLine.HasValue
+                ? elementStartLine.Value + CountNewlines(markdown.AsSpan(0, mdTable.Start))
+                : null;
+
             foreach (TableChunk part in protectedChunker.Table(markdown, mdTable, _repeatTableHeaders, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                yield return TableSplitter.CreateChunk(part, state.Document, state.Context);
+                int? partEndLine = null;
+                if (elementStartLine.HasValue)
+                {
+                    if (part.EndRow > 0 && part.EndRow <= rows.Count)
+                    {
+                        Range lastRow = rows[part.EndRow - 1];
+                        int lastIndex = lastRow.End.GetOffset(markdown.Length) - 1;
+                        while (lastIndex > mdTable.Start && (markdown[lastIndex] == '\n' || markdown[lastIndex] == '\r'))
+                        {
+                            lastIndex--;
+                        }
+
+                        partEndLine = elementStartLine.Value + CountNewlines(markdown.AsSpan(0, lastIndex));
+                    }
+                    else
+                    {
+                        int lastIndex = mdTable.End - 1;
+                        while (lastIndex > mdTable.Start && (markdown[lastIndex] == '\n' || markdown[lastIndex] == '\r'))
+                        {
+                            lastIndex--;
+                        }
+
+                        partEndLine = elementStartLine.Value + CountNewlines(markdown.AsSpan(0, lastIndex));
+                    }
+                }
+
+                yield return TableSplitter.CreateChunk(part, state.Document, state.Context, tableStartLine, partEndLine);
             }
         }
     }
 
     private IEnumerable<IngestionChunk<string>> Prose(SectionState state, string markdown, int start, int end,
-        string elementName, CancellationToken cancellationToken)
+        string elementName, int? elementStartLine, CancellationToken cancellationToken)
     {
         if (end <= start)
         {
             yield break;
         }
 
-        foreach (string chunk in AddProse(state, markdown, start, end, elementName, state.FollowingProse,
-                     cancellationToken))
+        foreach (BufferedChunk chunk in AddProse(state, markdown, start, end, elementName, state.FollowingProse,
+                     elementStartLine, cancellationToken))
         {
-            yield return new IngestionChunk<string>(chunk, state.Document, state.Context);
+            yield return CreateChunk(chunk.Content, state.Document, state.Context, chunk.StartLine, chunk.EndLine);
         }
     }
 
     /// <summary>Settles the queued prose and emits whatever the buffer holds.</summary>
     private IEnumerable<IngestionChunk<string>> Flush(SectionState state, CancellationToken cancellationToken)
     {
-        foreach (string chunk in Settle(state, cancellationToken))
+        foreach (BufferedChunk chunk in Settle(state, cancellationToken))
         {
-            yield return new IngestionChunk<string>(chunk, state.Document, state.Context);
+            yield return CreateChunk(chunk.Content, state.Document, state.Context, chunk.StartLine, chunk.EndLine);
         }
 
-        if (Take(state) is { } text)
+        if (Take(state) is { } final)
         {
-            yield return new IngestionChunk<string>(text, state.Document, state.Context);
+            yield return CreateChunk(final.Content, state.Document, state.Context, final.StartLine, final.EndLine);
         }
     }
 
@@ -272,19 +336,37 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
     /// the budget, and settles the queue once they may not. Joining text can change its token count either way, so
     /// the estimate only decides when to look; every chunk is cut from exact counts in <see cref="Settle"/>.
     /// </summary>
-    private IEnumerable<string> AddProse(
-        SectionState state, string text, int start, int end, string element, bool separate, CancellationToken cancellationToken)
+    private IEnumerable<BufferedChunk> AddProse(
+        SectionState state, string text, int start, int end, string element, bool separate, int? elementStartLine,
+        CancellationToken cancellationToken)
     {
         foreach (Range range in _splitter.Split(text, start, end, element, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             int tokens = _budget.Count(text.AsSpan(range)) + (separate ? _newlineTokens : 0);
-            state.Pending.Add(new PendingPiece(text, range, separate, tokens));
+
+            int? pieceStartLine = null;
+            int? pieceEndLine = null;
+            if (elementStartLine.HasValue)
+            {
+                int startOffset = range.Start.GetOffset(text.Length);
+                int endOffset = range.End.GetOffset(text.Length);
+                pieceStartLine = elementStartLine.Value + CountNewlines(text.AsSpan(0, startOffset));
+                int lastIndex = endOffset - 1;
+                while (lastIndex > startOffset && (text[lastIndex] == '\n' || text[lastIndex] == '\r'))
+                {
+                    lastIndex--;
+                }
+
+                pieceEndLine = elementStartLine.Value + CountNewlines(text.AsSpan(0, lastIndex));
+            }
+
+            state.Pending.Add(new PendingPiece(text, range, separate, tokens, pieceStartLine, pieceEndLine));
             state.PendingTokens += tokens;
             separate = false;
             if (state.BufferTokens + state.PendingTokens > _budget.Limit)
             {
-                foreach (string chunk in Settle(state, cancellationToken))
+                foreach (BufferedChunk chunk in Settle(state, cancellationToken))
                 {
                     yield return chunk;
                 }
@@ -296,7 +378,7 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
     /// Appends the queued pieces to the buffer exactly as appending them one at a time would: every piece that fits
     /// joins the buffer, and a piece that does not closes the current chunk and starts the next, carrying overlap.
     /// </summary>
-    private IEnumerable<string> Settle(SectionState state, CancellationToken cancellationToken)
+    private IEnumerable<BufferedChunk> Settle(SectionState state, CancellationToken cancellationToken)
     {
         List<PendingPiece> pending = state.Pending;
         int next = 0;
@@ -322,6 +404,16 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
             if (fit > 0)
             {
                 state.BufferTokens = _budget.Count(state.Buffer.Span);
+                if (state.BufferStartLine == null && pending[next].StartLine.HasValue)
+                {
+                    state.BufferStartLine = pending[next].StartLine;
+                }
+
+                if (pending[next + fit - 1].EndLine.HasValue)
+                {
+                    state.BufferEndLine = pending[next + fit - 1].EndLine;
+                }
+
                 next += fit;
                 continue;
             }
@@ -331,12 +423,12 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
             {
                 yield return previous;
                 cancellationToken.ThrowIfCancellationRequested();
-                CarryOverlap(state, previous, piece.Text, piece.Range, piece.Separate, cancellationToken);
+                CarryOverlap(state, previous, piece, cancellationToken);
             }
 
             if (state.Buffer.Length == 0)
             {
-                _ = TryAppend(state, piece.Text, piece.Range, separate: false);
+                _ = TryAppend(state, piece, separate: false);
             }
         }
 
@@ -360,72 +452,136 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
     }
 
     /// <summary>Appends one piece when the buffer then still fits, measured exactly.</summary>
-    private bool TryAppend(SectionState state, string text, Range range, bool separate)
+    private bool TryAppend(SectionState state, PendingPiece piece, bool separate)
     {
         PooledText buffer = state.Buffer;
         int length = buffer.Length;
+        int? oldStart = state.BufferStartLine;
+        int? oldEnd = state.BufferEndLine;
+
         if (length > 0 && separate)
         {
             buffer.Append("\n");
         }
 
-        buffer.Append(text.AsSpan(range));
+        buffer.Append(piece.Text.AsSpan(piece.Range));
         int tokens = _budget.Count(buffer.Span);
         if (tokens <= _budget.Limit)
         {
             state.BufferTokens = tokens;
+            if (state.BufferStartLine == null && piece.StartLine.HasValue)
+            {
+                state.BufferStartLine = piece.StartLine;
+            }
+
+            if (piece.EndLine.HasValue)
+            {
+                state.BufferEndLine = piece.EndLine;
+            }
+
             return true;
         }
 
         buffer.Length = length;
+        state.BufferStartLine = oldStart;
+        state.BufferEndLine = oldEnd;
         return false;
     }
 
-    private void CarryOverlap(SectionState state, string previous, string text, Range range, bool separate,
+    private void CarryOverlap(SectionState state, BufferedChunk previous, PendingPiece piece,
         CancellationToken cancellationToken)
     {
-        if (_overlap == 0 || text.AsSpan(range).IsWhiteSpace())
+        string previousContent = previous.Content;
+        if (_overlap == 0 || piece.Text.AsSpan(piece.Range).IsWhiteSpace())
         {
             return;
         }
 
-        int start = Math.Clamp(_budget.SuffixIndex(previous, _overlap), 0, previous.Length);
-        for (; start < previous.Length; start++)
+        int start = Math.Clamp(_budget.SuffixIndex(previousContent, _overlap), 0, previousContent.Length);
+        for (; start < previousContent.Length; start++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!TextBoundaries.IsScalarBoundary(previous, start) || !_splitter.IsOverlapBoundary(previous, start) ||
-                previous.AsSpan(start).IsWhiteSpace())
+            if (!TextBoundaries.IsScalarBoundary(previousContent, start) || !_splitter.IsOverlapBoundary(previousContent, start) ||
+                previousContent.AsSpan(start).IsWhiteSpace())
             {
                 continue;
             }
 
-            int overlapTokens = _budget.Count(previous.AsSpan(start));
+            int overlapTokens = _budget.Count(previousContent.AsSpan(start));
             if (overlapTokens > _overlap)
             {
                 continue;
             }
 
-            state.Buffer.Append(previous.AsSpan(start));
-            if (TryAppend(state, text, range, separate))
+            state.Buffer.Append(previousContent.AsSpan(start));
+            int? overlapStartLine = previous.StartLine.HasValue
+                ? previous.StartLine.Value + CountNewlines(previousContent.AsSpan(0, start))
+                : null;
+            state.BufferStartLine = overlapStartLine;
+            state.BufferEndLine = previous.EndLine;
+
+            if (TryAppend(state, piece, piece.Separate))
             {
                 return;
             }
 
             state.Buffer.Length = 0;
             state.BufferTokens = 0;
+            state.BufferStartLine = null;
+            state.BufferEndLine = null;
         }
     }
 
-    private static string? Take(SectionState state)
+    private static BufferedChunk? Take(SectionState state)
     {
         PooledText buffer = state.Buffer;
-        string? text = buffer.Span.IsWhiteSpace() ? null : buffer.ToString();
+        if (buffer.Span.IsWhiteSpace())
+        {
+            buffer.Length = 0;
+            state.BufferTokens = 0;
+            state.BufferStartLine = null;
+            state.BufferEndLine = null;
+            return null;
+        }
+
+        string text = buffer.ToString();
+        int? startLine = state.BufferStartLine;
+        int? endLine = state.BufferEndLine;
         buffer.Length = 0;
         state.BufferTokens = 0;
-        return text;
+        state.BufferStartLine = null;
+        state.BufferEndLine = null;
+        return new BufferedChunk(text, startLine, endLine);
     }
 
+    private static IngestionChunk<string> CreateChunk(
+        string content,
+        IngestionDocument document,
+        string? context,
+        int? startLine,
+        int? endLine)
+    {
+        IngestionChunk<string> chunk = new(content, document, context);
+        if (startLine.HasValue && endLine.HasValue)
+        {
+            if (document.Identifier is { Length: > 0 } filePath)
+            {
+                chunk.Metadata[ChunkMetadataKeys.FilePath] = filePath;
+            }
+
+            chunk.Metadata[ChunkMetadataKeys.StartLine] = startLine.Value;
+            chunk.Metadata[ChunkMetadataKeys.EndLine] = endLine.Value;
+            chunk.Metadata[ChunkMetadataKeys.LineRange] = $"{startLine.Value}-{endLine.Value}";
+        }
+
+        return chunk;
+    }
+
+    private static int CountNewlines(ReadOnlySpan<char> span) => span.Count('\n');
+
     private readonly record struct ProtectedRegion(int Start, int End, MarkdownFence? Fence, MarkdownTable? Table);
+
+    private readonly record struct BufferedChunk(string Content, int? StartLine, int? EndLine);
 
     /// <summary>The mutable state shared by the steps that process one section.</summary>
     private sealed class SectionState(IngestionDocument document, PooledText buffer, string? context)
@@ -441,6 +597,10 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
         /// <summary>Gets or sets the exact token count of <see cref="Buffer"/>; zero when it is empty.</summary>
         internal int BufferTokens { get; set; }
 
+        internal int? BufferStartLine { get; set; }
+
+        internal int? BufferEndLine { get; set; }
+
         /// <summary>Gets the prose pieces waiting to join the buffer.</summary>
         internal List<PendingPiece> Pending { get; } = [];
 
@@ -448,5 +608,11 @@ public sealed class RecursiveTokenChunker : IngestionChunker<string>
         internal int PendingTokens { get; set; }
     }
 
-    private readonly record struct PendingPiece(string Text, Range Range, bool Separate, int Tokens);
+    private readonly record struct PendingPiece(
+        string Text,
+        Range Range,
+        bool Separate,
+        int Tokens,
+        int? StartLine,
+        int? EndLine);
 }

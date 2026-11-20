@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [1.0.0-preview.4] - 2026-11-20
+
+### Added
+- `TextDocumentReader` and `TextDocumentReaderOptions` in `PinkRooster.Extensions.DataIngestion.Chunkers` for streaming verbatim document slices with 1-based start line metadata and Markdown heading extraction outside code fences.
+- Line location tracking (`file_path`, `start_line`, `end_line`, `line_range`) in `RecursiveTokenChunker` across prose, overlap, code fences, and tables when document elements carry source lines.
+
 ## [1.0.0-preview.3] - 2026-11-20
 
 ### Added

@@ -217,7 +217,9 @@ internal sealed class TableSplitter(TokenBudget budget)
     internal static IngestionChunk<string> CreateChunk(
         TableChunk chunk,
         IngestionDocument document,
-        string? context = null)
+        string? context = null,
+        int? startLine = null,
+        int? endLine = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         IngestionChunk<string> ingestionChunk = new(chunk.Content, document, context);
@@ -225,6 +227,19 @@ internal sealed class TableSplitter(TokenBudget budget)
         ingestionChunk.Metadata[ChunkMetadataKeys.IsTableContinuation] = chunk.IsContinuation;
         ingestionChunk.Metadata[ChunkMetadataKeys.TablePartIndex] = chunk.PartIndex;
         ingestionChunk.Metadata[ChunkMetadataKeys.TableRowRange] = TableRowRange.Format(chunk.StartRow, chunk.EndRow);
+
+        if (startLine.HasValue && endLine.HasValue)
+        {
+            if (document.Identifier is { Length: > 0 } filePath)
+            {
+                ingestionChunk.Metadata[ChunkMetadataKeys.FilePath] = filePath;
+            }
+
+            ingestionChunk.Metadata[ChunkMetadataKeys.StartLine] = startLine.Value;
+            ingestionChunk.Metadata[ChunkMetadataKeys.EndLine] = endLine.Value;
+            ingestionChunk.Metadata[ChunkMetadataKeys.LineRange] = $"{startLine.Value}-{endLine.Value}";
+        }
+
         return ingestionChunk;
     }
 

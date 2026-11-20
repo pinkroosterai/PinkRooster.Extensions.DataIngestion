@@ -83,3 +83,9 @@ sealed class PinkRooster.Extensions.DataIngestion.Chunkers.TableChunkerOptions :
   ctor(Microsoft.ML.Tokenizers.Tokenizer tokenizer)
   property System.Boolean EmitNonTableContent { get; set; }
   property System.Int32 ReservedHeaderTokens { get; set; }
+sealed class PinkRooster.Extensions.DataIngestion.Chunkers.TextDocumentReader : Microsoft.Extensions.DataIngestion.IngestionDocumentReader
+  ctor(PinkRooster.Extensions.DataIngestion.Chunkers.TextDocumentReaderOptions? options = null)
+  method override System.Threading.Tasks.Task`1[Microsoft.Extensions.DataIngestion.IngestionDocument] ReadAsync(System.IO.Stream source, System.String identifier, System.String mediaType, System.Threading.CancellationToken cancellationToken = default)
+sealed class PinkRooster.Extensions.DataIngestion.Chunkers.TextDocumentReaderOptions : System.Object
+  ctor()
+  property System.Boolean ExtractMarkdownHeadings { get; set; }
