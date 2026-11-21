@@ -5,6 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" VersionOverride="11.0.0" />
     <ProjectReference Include="../../src/PinkRooster.Extensions.DataIngestion.Chunkers/PinkRooster.Extensions.DataIngestion.Chunkers.csproj" />
     <PackageReference Include="Microsoft.ML.Tokenizers.Data.O200kBase" />
     <InternalsVisibleTo Include="PinkRooster.Extensions.DataIngestion.Repository.Tests" />
